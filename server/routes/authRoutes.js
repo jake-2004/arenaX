@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { Tournament } from '../models/Tournament.js';
 import { TblUser, TblOrganizer, TblTeam, TblPlayer, TblTournament, TblTournamentPoster, TblActivityLog } from '../models/schemaModels.js';
+import { createNotificationHelper } from './notificationRoutes.js';
 
 const router = express.Router();
 
@@ -302,6 +303,20 @@ router.post('/register', async (req, res) => {
 
     // If Organizer registration, BLOCK login & require Admin approval
     if (isOrganizer) {
+      // Notify Admin of new organizer admission request
+      try {
+        await createNotificationHelper({
+          role: 'admin',
+          title: 'New Organizer Admission Request',
+          message: `Organizer "${newUser.name}" (${newUser.organization || 'Sports Club'}) registered and is waiting for admission approval.`,
+          type: 'organizer_request',
+          actionNav: 'organizers',
+          metadata: { userId: newUser._id }
+        });
+      } catch (nErr) {
+        console.warn('Organizer admission notification warning:', nErr.message);
+      }
+
       return res.status(201).json({
         success: true,
         message: 'Organizer registration submitted successfully! Your account is currently PENDING ADMIN APPROVAL. You cannot log in until an Admin admits your account.',
@@ -321,7 +336,7 @@ router.post('/register', async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: `Registered successfully as ${assignedRole} in MongoDB!`,
+      message: `Registered successfully as ${assignedRole}!`,
       token,
       user: {
         id: newUser._id,
@@ -338,13 +353,13 @@ router.post('/register', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Registration MongoDB Error:', error);
+    console.error('Registration Error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
 // @route   POST /api/auth/login
-// @desc    Authenticate user (Admin, Organizer, or LocalUser) against MongoDB
+// @desc    Authenticate user (Admin, Organizer, or LocalUser)
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -355,10 +370,10 @@ router.post('/login', async (req, res) => {
 
     const formattedEmail = email.toLowerCase().trim();
 
-    // Find User in MongoDB
+    // Find User
     const user = await User.findOne({ email: formattedEmail });
     if (!user) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials. User not found in MongoDB database.' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials. User not found.' });
     }
 
     // Compare Password Hash
@@ -373,7 +388,7 @@ router.post('/login', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Authenticated via MongoDB!',
+      message: 'Authenticated successfully!',
       token,
       user: {
         id: user._id,
@@ -446,6 +461,21 @@ router.post('/organizers/approve', async (req, res) => {
     const smsMessage = `[ArenaX SMS Notification]: Hello ${user.name}, your Organizer account (${user.organization || 'ArenaX League'}) has been APPROVED by Platform Admin. You can now log in at http://localhost:5173.`;
 
     console.log(`📱 SMS SENT TO ${phoneNumber}: "${smsMessage}"`);
+
+    // Notify Organizer that their account has been admitted & approved
+    try {
+      await createNotificationHelper({
+        userId: user._id,
+        role: 'organizer',
+        title: 'Organizer Account Approved! 🛡️',
+        message: `Congratulations ${user.name}! Your Organizer account (${user.organization || 'ArenaX League'}) was approved by Platform Admin. You can now host tournaments.`,
+        type: 'organizer_status',
+        actionNav: 'dashboard',
+        metadata: { userId: user._id }
+      });
+    } catch (nErr) {
+      console.warn('Organizer approve notification warning:', nErr.message);
+    }
 
     return res.json({
       success: true,
@@ -567,36 +597,109 @@ router.get('/tournaments/pending', async (req, res) => {
 });
 
 // @route   POST /api/auth/tournaments/approve
-// @desc    Admin approves tournament & publishes poster to local user feeds
+// @desc    Admin approves tournament -> status becomes Admin_Approved (awaiting organizer publishing payment)
 router.post('/tournaments/approve', async (req, res) => {
   try {
     const { tournamentId } = req.body;
     
     // Update TblTournament
-    let tblTournament = await TblTournament.findByIdAndUpdate(tournamentId, { status: 'Approved' }, { new: true });
+    let tblTournament = await TblTournament.findByIdAndUpdate(
+      tournamentId, 
+      { 
+        status: 'Admin_Approved', 
+        admin_approved: true, 
+        admin_approved_at: new Date(),
+        publishing_fee_paid: false 
+      }, 
+      { new: true }
+    );
     
-    // Update Tournament feed model
-    let feedTournament = await Tournament.findByIdAndUpdate(tournamentId, { isApproved: true, status: 'registration_open' }, { new: true });
+    // Update Tournament feed model (keep isApproved: false until organizer completes payment!)
+    let feedTournament = await Tournament.findByIdAndUpdate(
+      tournamentId, 
+      { 
+        isApproved: false, 
+        status: 'admin_approved', 
+        admin_approved: true,
+        publishing_fee_paid: false 
+      }, 
+      { new: true }
+    );
 
     if (tblTournament && !feedTournament) {
       feedTournament = await Tournament.findOneAndUpdate(
         { title: tblTournament.tournament_name },
-        { isApproved: true, status: 'registration_open' },
+        { 
+          isApproved: false, 
+          status: 'admin_approved', 
+          admin_approved: true,
+          publishing_fee_paid: false 
+        },
         { new: true }
       );
     } else if (feedTournament && !tblTournament) {
       tblTournament = await TblTournament.findOneAndUpdate(
         { tournament_name: feedTournament.title },
-        { status: 'Approved' },
+        { 
+          status: 'Admin_Approved', 
+          admin_approved: true, 
+          admin_approved_at: new Date(),
+          publishing_fee_paid: false 
+        },
         { new: true }
       );
     }
 
+    // Update linked poster in TblTournamentPoster
+    try {
+      const matchIds = [tournamentId];
+      if (tblTournament?._id) matchIds.push(tblTournament._id);
+      if (feedTournament?._id) matchIds.push(feedTournament._id);
+      await TblTournamentPoster.updateMany(
+        {
+          $or: [
+            { tournament_id: { $in: matchIds } },
+            { poster_url: tblTournament?.poster_url || feedTournament?.posterUrl }
+          ]
+        },
+        {
+          $set: {
+            approval_status: 'Admin_Approved',
+            admin_approved: true,
+            admin_approved_at: new Date(),
+            publishing_fee_paid: false
+          }
+        }
+      );
+    } catch (pErr) {
+      console.warn('Poster sync error on tournament approval:', pErr.message);
+    }
+
     const title = tblTournament?.tournament_name || feedTournament?.title || 'Tournament';
+
+    // Notify Organizer that tournament was approved and needs publishing payment
+    try {
+      let orgUserId = null;
+      if (tblTournament?.organizer_id) {
+        const orgDoc = await TblOrganizer.findById(tblTournament.organizer_id).lean();
+        orgUserId = orgDoc?.user_id || tblTournament.organizer_id;
+      }
+      await createNotificationHelper({
+        userId: orgUserId,
+        role: 'organizer',
+        title: 'Tournament Approved! 💳 Action Required: Pay to Publish',
+        message: `Your tournament "${title}" has been approved by Platform Superadmin! Please complete the publishing fee of ₹499 to publish it to the local user feed.`,
+        type: 'tournament_status',
+        actionNav: 'my_tournaments',
+        metadata: { tournamentId, status: 'Admin_Approved' }
+      });
+    } catch (nErr) {
+      console.warn('Tournament approval notification warning:', nErr.message);
+    }
 
     return res.json({
       success: true,
-      message: `Tournament "${title}" approved by Admin! Shared to local user feeds.`,
+      message: `Tournament "${title}" approved by Admin! Status set to "Admin Approved". Organizer notified to pay publishing fee.`,
       tournament: feedTournament || tblTournament
     });
   } catch (error) {
@@ -625,6 +728,42 @@ router.post('/tournaments/reject', async (req, res) => {
       );
     }
 
+    // Also update poster
+    const matchIds = [tournamentId];
+    if (tblTournament?._id) matchIds.push(tblTournament._id);
+    if (feedTournament?._id) matchIds.push(feedTournament._id);
+    await TblTournamentPoster.updateMany(
+      {
+        $or: [
+          { tournament_id: { $in: matchIds } },
+          { poster_url: tblTournament?.poster_url || feedTournament?.posterUrl }
+        ]
+      },
+      { $set: { approval_status: 'Rejected' } }
+    ).catch(() => null);
+
+    const title = tblTournament?.tournament_name || feedTournament?.title || 'Tournament';
+
+    // Notify Organizer that tournament application was rejected
+    try {
+      let orgUserId = null;
+      if (tblTournament?.organizer_id) {
+        const orgDoc = await TblOrganizer.findById(tblTournament.organizer_id).lean();
+        orgUserId = orgDoc?.user_id || tblTournament.organizer_id;
+      }
+      await createNotificationHelper({
+        userId: orgUserId,
+        role: 'organizer',
+        title: 'Tournament Rejected',
+        message: `Your tournament application for "${title}" was rejected by Platform Admin. Please review tournament requirements.`,
+        type: 'tournament_status',
+        actionNav: 'my_tournaments',
+        metadata: { tournamentId }
+      });
+    } catch (nErr) {
+      console.warn('Tournament reject notification warning:', nErr.message);
+    }
+
     return res.json({ success: true, message: 'Tournament application rejected.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -639,6 +778,76 @@ router.get('/posters/pending', async (req, res) => {
     res.json({ success: true, count: pending.length, posters: pending });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message, posters: [] });
+  }
+});
+
+// @route   POST /api/auth/posters/approve
+// @desc    Admin approves poster -> sets poster & tournament to Admin_Approved (awaiting organizer publishing payment)
+router.post('/posters/approve', async (req, res) => {
+  try {
+    const { posterId, tournamentId } = req.body;
+
+    let poster = null;
+    if (posterId) {
+      poster = await TblTournamentPoster.findByIdAndUpdate(
+        posterId,
+        {
+          approval_status: 'Admin_Approved',
+          admin_approved: true,
+          admin_approved_at: new Date(),
+          publishing_fee_paid: false
+        },
+        { new: true }
+      );
+    }
+
+    const tId = tournamentId || poster?.tournament_id;
+    if (tId) {
+      await TblTournament.findByIdAndUpdate(tId, {
+        status: 'Admin_Approved',
+        admin_approved: true,
+        admin_approved_at: new Date(),
+        publishing_fee_paid: false
+      });
+      await Tournament.findByIdAndUpdate(tId, {
+        isApproved: false,
+        status: 'admin_approved',
+        admin_approved: true,
+        publishing_fee_paid: false
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Poster approved by Admin! Status set to "Admin Approved". Organizer must pay publishing fee to publish live.',
+      poster
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @route   POST /api/auth/posters/reject
+// @desc    Admin rejects poster application
+router.post('/posters/reject', async (req, res) => {
+  try {
+    const { posterId, tournamentId } = req.body;
+    let poster = null;
+    if (posterId) {
+      poster = await TblTournamentPoster.findByIdAndUpdate(
+        posterId,
+        { approval_status: 'Rejected' },
+        { new: true }
+      );
+    }
+    const tId = tournamentId || poster?.tournament_id;
+    if (tId) {
+      await TblTournament.findByIdAndUpdate(tId, { status: 'Rejected', isApproved: false });
+      await Tournament.findByIdAndUpdate(tId, { status: 'rejected', isApproved: false });
+    }
+    return res.json({ success: true, message: 'Poster application rejected.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -678,6 +887,49 @@ router.get('/stats', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message, userCount: 0, organizerCount: 0, tournamentCount: 0, posterCount: 0, activities: [] });
+  }
+});
+
+// @route   POST /api/auth/reset-password
+// @desc    Reset password for user account in MongoDB
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, new_password } = req.body;
+
+    if (!email || !new_password) {
+      return res.status(400).json({ success: false, message: 'Email and new password are required.' });
+    }
+
+    if (new_password.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long.' });
+    }
+
+    const formattedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: formattedEmail });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'No registered account found with this email address.' });
+    }
+
+    // Update password (pre-save middleware in User.js will hash it!)
+    user.password = new_password;
+    await user.save();
+
+    // Also update corresponding TblUser in MongoDB
+    try {
+      const tblUser = await TblUser.findOne({ email: formattedEmail });
+      if (tblUser) {
+        tblUser.password = user.password;
+        await tblUser.save();
+      }
+    } catch (e) {}
+
+    res.json({
+      success: true,
+      message: '🎉 Password reset successfully! You can now sign in with your new password.'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 

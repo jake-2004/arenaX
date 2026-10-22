@@ -8,7 +8,11 @@ import RazorpayModal from './components/Features/RazorpayModal';
 import NotificationsDrawer from './components/Common/NotificationsDrawer';
 import Sidebar from './components/Common/Sidebar';
 import ProfileModal from './components/Common/ProfileModal';
-import { registerUserAPI, loginUserAPI, checkHealthAPI } from './services/api';
+import { 
+  registerUserAPI, loginUserAPI, checkHealthAPI,
+  getNotificationsAPI, markNotificationReadAPI, 
+  markAllNotificationsReadAPI, clearAllNotificationsAPI 
+} from './services/api';
 import { Database, Clock, Lock, AlertTriangle, ShieldCheck, LogIn } from 'lucide-react';
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minutes Session Timeout
@@ -17,6 +21,7 @@ export default function App() {
   // Authentication Gate: Require user to enter correct credentials to enter dashboard
   const [currentUser, setCurrentUser] = useState(null);
   const [activeNavAction, setActiveNavAction] = useState('dashboard');
+  const [navKey, setNavKey] = useState(0);
 
   // Modals state
   const [authModalState, setAuthModalState] = useState({ isOpen: true, tab: 'login' });
@@ -24,6 +29,11 @@ export default function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [sessionTimeoutBanner, setSessionTimeoutBanner] = useState(null);
+
+  // Real-time Notifications State
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
 
   // MongoDB status state
   const [mongoStatus, setMongoStatus] = useState({ status: 'Connecting', database: 'arenax' });
@@ -109,6 +119,10 @@ export default function App() {
     }
 
     if (response && response.success !== false && response.user) {
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+      }
+      localStorage.setItem('user', JSON.stringify(response.user));
       setCurrentUser(response.user);
       setAuthModalState({ isOpen: false, tab: 'login' });
       setSessionTimeoutBanner(null);
@@ -123,6 +137,8 @@ export default function App() {
 
   // Logout Handler
   const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setCurrentUser(null);
     setSessionTimeoutBanner(null);
     setAuthModalState({ isOpen: true, tab: 'login' });
@@ -131,6 +147,60 @@ export default function App() {
   // Profile Save Handler — updates in-memory user state
   const handleProfileSave = (updatedUser) => {
     setCurrentUser(prev => ({ ...prev, ...updatedUser }));
+  };
+
+  // Real-time Notifications Management
+  const fetchNotifications = async () => {
+    if (!currentUser) return;
+    try {
+      setLoadingNotifications(true);
+      const res = await getNotificationsAPI();
+      if (res && res.success && Array.isArray(res.notifications)) {
+        setNotifications(res.notifications);
+        setUnreadNotificationsCount(res.unreadCount ?? 0);
+      }
+    } catch (err) {
+      console.warn('Error fetching notifications:', err);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 12000); // 12-second live sync
+      return () => clearInterval(interval);
+    } else {
+      setNotifications([]);
+      setUnreadNotificationsCount(0);
+    }
+  }, [currentUser]);
+
+  const handleMarkNotificationRead = async (id) => {
+    setNotifications(prev => prev.map(n => (n.id === id || n._id === id) ? { ...n, unread: false } : n));
+    setUnreadNotificationsCount(prev => Math.max(0, prev - 1));
+    await markNotificationReadAPI(id);
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+    setUnreadNotificationsCount(0);
+    await markAllNotificationsReadAPI();
+  };
+
+  const handleClearAllNotifications = async () => {
+    setNotifications([]);
+    setUnreadNotificationsCount(0);
+    await clearAllNotificationsAPI();
+  };
+
+  const handleNotificationNavigate = (actionNav) => {
+    if (actionNav) {
+      setActiveNavAction(actionNav);
+      setNavKey(prev => prev + 1);
+      setShowNotifications(false);
+    }
   };
 
   // Trigger Razorpay Payment Checkout
@@ -148,7 +218,7 @@ export default function App() {
         onOpenAuth={(tab) => setAuthModalState({ isOpen: true, tab })}
         onLogout={handleLogout}
         onToggleNotifications={() => setShowNotifications(!showNotifications)}
-        unreadCount={2}
+        unreadCount={unreadNotificationsCount}
         onProfileSave={handleProfileSave}
       />
 
@@ -177,7 +247,10 @@ export default function App() {
           <Sidebar
             userRole={currentUser.role}
             activeNav={activeNavAction}
-            onNavSelect={(label, actionId) => setActiveNavAction(actionId || label)}
+            onNavSelect={(label, actionId) => {
+              setActiveNavAction(actionId || label);
+              setNavKey(prev => prev + 1);
+            }}
           />
         )}
 
@@ -187,7 +260,11 @@ export default function App() {
             <UserDashboard
               user={currentUser}
               activeNavAction={activeNavAction}
-              onNavigate={(action) => setActiveNavAction(action)}
+              navKey={navKey}
+              onNavigate={(action) => {
+                setActiveNavAction(action);
+                setNavKey(prev => prev + 1);
+              }}
               onOpenRegisterTeam={(tournament) => handleTriggerRazorpay(`Registration Fee: ${tournament.title}`, tournament.entryFee, 'registration')}
             />
           )}
@@ -196,14 +273,22 @@ export default function App() {
             <OrganizerDashboard
               organizer={currentUser}
               activeNavAction={activeNavAction}
-              onNavigate={(action) => setActiveNavAction(action)}
+              navKey={navKey}
+              onNavigate={(action) => {
+                setActiveNavAction(action);
+                setNavKey(prev => prev + 1);
+              }}
             />
           )}
 
           {currentUser?.role === 'admin' && (
             <AdminDashboard
               activeNavAction={activeNavAction}
-              onNavigate={(action) => setActiveNavAction(action)}
+              navKey={navKey}
+              onNavigate={(action) => {
+                setActiveNavAction(action);
+                setNavKey(prev => prev + 1);
+              }}
             />
           )}
 
@@ -297,6 +382,20 @@ export default function App() {
           }}
         />
       )}
+
+      {/* NOTIFICATIONS DRAWER */}
+      <NotificationsDrawer
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        notifications={notifications}
+        unreadCount={unreadNotificationsCount}
+        onMarkRead={handleMarkNotificationRead}
+        onMarkAllRead={handleMarkAllNotificationsRead}
+        onClearAll={handleClearAllNotifications}
+        onNavigate={handleNotificationNavigate}
+        onRefresh={fetchNotifications}
+        loading={loadingNotifications}
+      />
 
     </div>
   );

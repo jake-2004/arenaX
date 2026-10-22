@@ -114,13 +114,36 @@ export const initializeCollectionsAndSeed = async () => {
         organization: 'London Elite Sports Org'
       },
       {
-        name: 'Alex Mercer (Local Player)',
+        name: 'Rahul (Player ID #100001)',
         email: 'user@arenax.io',
         password: 'Password123!',
         role: 'user',
         location: 'London, UK',
-        favoriteSports: ['Football', 'Cricket'],
-        teamName: 'East End Eagles FC'
+        favoriteSports: ['Chess', 'Football', 'Cricket']
+      },
+      {
+        name: 'JOHN',
+        email: 'john@gmail.com',
+        password: 'Password123!',
+        role: 'user',
+        location: 'London, UK',
+        favoriteSports: ['Football', 'Cricket']
+      },
+      {
+        name: 'deric',
+        email: 'deric@gmail.com',
+        password: 'Password123!',
+        role: 'user',
+        location: 'London, UK',
+        favoriteSports: ['Football', 'Cricket']
+      },
+      {
+        name: 'Ben',
+        email: 'player1@arenax.io',
+        password: 'Password123!',
+        role: 'user',
+        location: 'London, UK',
+        favoriteSports: ['Football', 'Cricket']
       },
       {
         name: 'Alex Mercer (Alias)',

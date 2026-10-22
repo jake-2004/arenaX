@@ -40,7 +40,7 @@ const tournamentSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['registration_open', 'live_now', 'completed'],
+    enum: ['registration_open', 'live_now', 'completed', 'admin_approved', 'Pending', 'Rejected'],
     default: 'registration_open'
   },
   posterUrl: {
@@ -62,6 +62,22 @@ const tournamentSchema = new mongoose.Schema({
   isApproved: {
     type: Boolean,
     default: false
+  },
+  admin_approved: {
+    type: Boolean,
+    default: false
+  },
+  publishing_fee_paid: {
+    type: Boolean,
+    default: false
+  },
+  publishing_payment_id: {
+    type: String,
+    default: ''
+  },
+  publishing_fee: {
+    type: Number,
+    default: 499
   }
 }, {
   timestamps: true

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trophy, Users, Shield, CheckCircle2, XCircle, RefreshCw, AlertCircle, Check } from 'lucide-react';
-import { getTournamentRegistrationsAPI, verifyRosterDecisionsAPI } from '../../services/api';
+import { X, Trophy, Users, Shield, CheckCircle2, XCircle, RefreshCw, AlertCircle, Check, Zap, Calendar, Clock } from 'lucide-react';
+import { getTournamentRegistrationsAPI, verifyRosterDecisionsAPI, getFullUploadUrl } from '../../services/api';
 
-export default function ViewRegisteredTeamsModal({ tournament, onClose }) {
+export default function ViewRegisteredTeamsModal({ tournament, onClose, onOpenFixtures, onOpenMatchHub }) {
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [playerDecisionsMap, setPlayerDecisionsMap] = useState({});
@@ -67,6 +67,10 @@ export default function ViewRegisteredTeamsModal({ tournament, onClose }) {
     }
   };
 
+  const approvedTeamsCount = registrations.filter(r => r.registration_status === 'Approved').length;
+  const maxTeams = tournament.maxTeams || tournament.max_teams || 16;
+  const isLimitFull = registrations.length >= maxTeams;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl overflow-hidden relative border border-[#E5E7EB] my-auto max-h-[90vh] flex flex-col">
@@ -81,14 +85,39 @@ export default function ViewRegisteredTeamsModal({ tournament, onClose }) {
             <X className="w-5 h-5" />
           </button>
 
-          <div className="space-y-1 pr-10">
-            <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-black uppercase tracking-wider">
-              {tournament.sport || 'Sports Tournament'} • REGISTERED TEAMS
-            </span>
-            <h3 className="text-xl font-black text-white">{tournament.title || tournament.tournament_name}</h3>
-            <p className="text-xs text-white/80">
-              Inspect registered team rosters, verify player ID proofs, and grant tournament participation approval.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pr-10">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-black uppercase tracking-wider">
+                  {tournament.sport || 'Sports Tournament'} • REGISTERED TEAMS ({registrations.length}/{maxTeams})
+                </span>
+                {isLimitFull && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[10px] font-black uppercase shadow-sm">
+                    🔒 REGISTRATION LIMIT FULL
+                  </span>
+                )}
+              </div>
+              <h3 className="text-xl font-black text-white">{tournament.title || tournament.tournament_name}</h3>
+              <p className="text-xs text-white/80">
+                Inspect registered team rosters, verify player ID proofs, and grant tournament participation approval.
+              </p>
+            </div>
+
+            {/* Direct Button to Create Fixtures or Open Match Hub */}
+            {(onOpenFixtures || onOpenMatchHub) && registrations.length >= 2 && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  if (onOpenFixtures) onOpenFixtures(tournament);
+                  else if (onOpenMatchHub) onOpenMatchHub(tournament);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-white text-[#8B0000] hover:bg-amber-100 text-xs font-black shadow-lg transition-all flex items-center space-x-1.5 shrink-0 cursor-pointer animate-pulse"
+              >
+                <Zap className="w-4 h-4 text-[#8B0000]" />
+                <span>Create Fixtures / Open Match Center →</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -147,6 +176,22 @@ export default function ViewRegisteredTeamsModal({ tournament, onClose }) {
                       }`}>
                         Status: {regStatus}
                       </span>
+
+                      {Boolean((reg.payment_status || '').toLowerCase() === 'paid') ? (
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-black uppercase flex items-center space-x-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>Paid (₹{tournament.entryFee ?? 500})</span>
+                        </span>
+                      ) : (reg.payment_status || '').toLowerCase() === 'refunded' ? (
+                        <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-black uppercase">
+                          ↩ Refunded
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase flex items-center space-x-1">
+                          <Clock className="w-3 h-3 text-amber-700" />
+                          <span>Fee Pending</span>
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -180,36 +225,58 @@ export default function ViewRegisteredTeamsModal({ tournament, onClose }) {
                                 <p className="text-[10px] text-slate-400">
                                   ID: {p.id_proof_type || 'Govt Photo ID'} {p.id_proof_number ? `(#${p.id_proof_number})` : ''}
                                 </p>
+                                {p.id_proof_doc && (
+                                  <a
+                                    href={getFullUploadUrl(p.id_proof_doc)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[9px] font-bold text-[#8B0000] hover:underline flex items-center space-x-1 mt-0.5"
+                                  >
+                                    <span>📄 View Uploaded ID Proof</span>
+                                  </a>
+                                )}
                               </div>
 
                               <div className="flex items-center space-x-1.5 shrink-0">
-                                {/* Accept Tick (✓) */}
-                                <button
-                                  type="button"
-                                  onClick={() => handlePlayerToggle(reg._id, p.player_name, 'Approved')}
-                                  className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center transition-all cursor-pointer ${
-                                    isApproved
-                                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-600'
-                                      : 'bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-500'
-                                  }`}
-                                  title="Approve Player"
-                                >
-                                  ✓
-                                </button>
+                                {p.verification_status === 'Approved' || p.verification_status === 'Declined' ? (
+                                  <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase flex items-center space-x-1 border ${
+                                    p.verification_status === 'Approved'
+                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                      : 'bg-rose-100 text-rose-800 border-rose-300'
+                                  }`}>
+                                    <span>🔒 {p.verification_status === 'Approved' ? '✓ Approved' : '✕ Declined'}</span>
+                                  </span>
+                                ) : (
+                                  <>
+                                    {/* Accept Tick (✓) */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePlayerToggle(reg._id, p.player_name, 'Approved')}
+                                      className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center transition-all cursor-pointer ${
+                                        isApproved
+                                          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-600'
+                                          : 'bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-500'
+                                      }`}
+                                      title="Approve Player"
+                                    >
+                                      ✓
+                                    </button>
 
-                                {/* Decline Cross (✕) */}
-                                <button
-                                  type="button"
-                                  onClick={() => handlePlayerToggle(reg._id, p.player_name, 'Declined')}
-                                  className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center transition-all cursor-pointer ${
-                                    isDeclined
-                                      ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-2 ring-rose-600'
-                                      : 'bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-500'
-                                  }`}
-                                  title="Decline Player"
-                                >
-                                  ✕
-                                </button>
+                                    {/* Decline Cross (✕) */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePlayerToggle(reg._id, p.player_name, 'Declined')}
+                                      className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center transition-all cursor-pointer ${
+                                        isDeclined
+                                          ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-2 ring-rose-600'
+                                          : 'bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-500'
+                                      }`}
+                                      title="Decline Player"
+                                    >
+                                      ✕
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           );
@@ -242,6 +309,33 @@ export default function ViewRegisteredTeamsModal({ tournament, onClose }) {
             })
           )}
         </div>
+
+        {/* Bottom Action Footer for Fixtures / Match Center */}
+        {registrations.length >= 2 && (
+          <div className="p-4 bg-slate-50 border-t border-[#E5E7EB] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center space-x-2 text-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+              <span className="font-bold text-slate-700">
+                {isLimitFull ? '🔒 Tournament Registration Limit Full!' : `${registrations.length} Teams Ready for Fixture Generation`}
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  if (onOpenFixtures) onOpenFixtures(tournament);
+                  else if (onOpenMatchHub) onOpenMatchHub(tournament);
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#8B0000] hover:bg-[#6B0000] text-white text-xs font-black shadow-lg shadow-[#8B0000]/25 transition-all flex items-center justify-center space-x-2 cursor-pointer"
+              >
+                <Zap className="w-4 h-4 text-amber-300" />
+                <span>Create Fixtures / Open Match Center →</span>
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

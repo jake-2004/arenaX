@@ -177,20 +177,6 @@ export default function ProfileModal({ user, onClose, onSave }) {
             />
           </div>
 
-          {/* Phone */}
-          <div>
-            <label className="block text-xs font-bold text-[#4B5563] mb-1.5">
-              <Phone className="w-3.5 h-3.5 inline mr-1 text-[#8B0000]" />Phone Number
-            </label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={e => setPhone(e.target.value)}
-              placeholder="+91 00000 00000"
-              className="w-full bg-white border border-[#E5E7EB] focus:border-[#8B0000] text-[#1F2937] text-xs rounded-xl px-3.5 py-2.5 focus:outline-none transition-all"
-            />
-          </div>
-
           {/* Location */}
           <div>
             <label className="block text-xs font-bold text-[#4B5563] mb-1.5">

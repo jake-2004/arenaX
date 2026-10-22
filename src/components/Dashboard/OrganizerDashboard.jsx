@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Trophy, PlusCircle, Activity, ArrowRight, Upload, X, CheckCircle2, Image as ImageIcon, Users, Clock, Eye } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Trophy, PlusCircle, Activity, ArrowRight, Upload, X, CheckCircle2, Image as ImageIcon, Users, Clock, Eye, Sparkles, CreditCard, Bookmark, Wand2 } from 'lucide-react';
 import CreateTournamentPage from '../Features/CreateTournamentPage';
+import AIPosterStudio from '../Features/AIPosterStudio';
 import RegistrationsView from './RegistrationsView';
 import HostedTournamentsView from './HostedTournamentsView';
-import { getTournamentsAPI } from '../../services/api';
+import AdminApprovedPublishModal from './AdminApprovedPublishModal';
+import OrganizerTeamPaymentsView from './OrganizerTeamPaymentsView';
+import { getTournamentsAPI, getOrganizerTournamentsAPI, getOrganizerRevenueSummaryAPI } from '../../services/api';
 
 export default function OrganizerDashboard({ organizer, activeNavAction, onNavigate }) {
   const [internalActiveView, setInternalActiveView] = useState('dashboard');
@@ -14,22 +17,93 @@ export default function OrganizerDashboard({ organizer, activeNavAction, onNavig
   const [liveScores, setLiveScores] = useState({ teamA: 142, teamB: 138 });
   const [toastMessage, setToastMessage] = useState(null);
   const [eventsCount, setEventsCount] = useState(organizer?.hostedTournamentsCount || 0);
+  const [totalRegisteredTeams, setTotalRegisteredTeams] = useState(0);
+  const [totalPrizePool, setTotalPrizePool] = useState(0);
+  const [totalTeamCollections, setTotalTeamCollections] = useState(0);
+
+  // Admin Approved & Pay to Publish State
+  const [approvedTournamentToPublish, setApprovedTournamentToPublish] = useState(null);
+  const [pendingPublishTournaments, setPendingPublishTournaments] = useState([]);
+  
+  // Track tournaments kept in Draft so auto-popup never harasses repeatedly
+  const draftTournamentsRef = useRef(new Set());
+  const hasAutoPromptedOnEntryRef = useRef(false);
+
+  // Load existing draft records from sessionStorage on mount
+  useEffect(() => {
+    try {
+      Object.keys(sessionStorage).forEach(key => {
+        if (key.startsWith('arenax_draft_publish_')) {
+          const tId = key.replace('arenax_draft_publish_', '');
+          draftTournamentsRef.current.add(tId);
+        }
+      });
+    } catch (e) {}
+  }, []);
+
+  const fetchOrganizerMetrics = async () => {
+    const res = await getOrganizerTournamentsAPI();
+    if (res && res.tournaments && Array.isArray(res.tournaments)) {
+      setEventsCount(res.tournaments.length);
+
+      let totalTeams = 0;
+      let totalPrize = 0;
+
+      const pendingList = res.tournaments.filter(t => 
+        (t.status || '').toLowerCase() === 'admin_approved' || 
+        Boolean(t.admin_approved && !t.publishing_fee_paid && (t.status || '').toLowerCase() !== 'approved')
+      );
+      setPendingPublishTournaments(pendingList);
+
+      // Auto popup dialog ONCE when organizer enters the page, ONLY for tournaments NOT kept in draft!
+      if (pendingList.length > 0 && !hasAutoPromptedOnEntryRef.current) {
+        hasAutoPromptedOnEntryRef.current = true;
+        const targetToPrompt = pendingList.find(t => !draftTournamentsRef.current.has(String(t._id || t.id)));
+        if (targetToPrompt) {
+          setApprovedTournamentToPublish(targetToPrompt);
+        }
+      }
+
+      res.tournaments.forEach(t => {
+        const count = Number(t.registeredTeamsCount || t.registered_teams_count || 0);
+        totalTeams += count;
+
+        const prizeStr = t.prizePool || t.prize_amount || '0';
+        const numericPrize = parseInt(String(prizeStr).replace(/[^0-9]/g, '')) || 0;
+        totalPrize += numericPrize;
+      });
+
+      setTotalRegisteredTeams(totalTeams);
+      setTotalPrizePool(totalPrize);
+    }
+
+    try {
+      const revRes = await getOrganizerRevenueSummaryAPI();
+      if (revRes && revRes.success && revRes.summary) {
+        setTotalTeamCollections(revRes.summary.totalGrossCollected || 0);
+      }
+    } catch (e) {}
+  };
 
   useEffect(() => {
-    const fetchEventsCount = async () => {
-      const res = await getTournamentsAPI();
-      if (res && res.tournaments && res.tournaments.length > 0) {
-        const matching = res.tournaments.filter(t => 
-          t.organizer === organizer?.name || 
-          t.organizer_email === organizer?.email ||
-          t.organizer_id === organizer?.id ||
-          t.organizer_id === organizer?._id
-        );
-        setEventsCount(matching.length > 0 ? matching.length : res.tournaments.length);
-      }
-    };
-    fetchEventsCount();
+    fetchOrganizerMetrics();
+    // Live polling every 4 seconds to update counts in background without re-opening dialogs
+    const interval = setInterval(fetchOrganizerMetrics, 4000);
+    return () => clearInterval(interval);
   }, [organizer]);
+
+  const handleKeepInDraft = (tournament) => {
+    const id = tournament?._id || tournament?.id;
+    if (id) {
+      try {
+        sessionStorage.setItem(`arenax_draft_publish_${id}`, 'true');
+      } catch (e) {}
+      draftTournamentsRef.current.add(String(id));
+    }
+    setApprovedTournamentToPublish(null);
+    setToastMessage(`📁 "${tournament?.title || tournament?.tournament_name || 'Tournament'}" kept in Draft. You can complete payment & publish live anytime!`);
+    setTimeout(() => setToastMessage(null), 6000);
+  };
 
   const activeView = activeNavAction || internalActiveView;
 
@@ -71,6 +145,19 @@ export default function OrganizerDashboard({ organizer, activeNavAction, onNavig
     );
   }
 
+  if (activeView === 'ai_poster_studio' || activeView === 'AI Poster Studio') {
+    return (
+      <AIPosterStudio
+        organizer={organizer}
+        onBack={() => setView('dashboard')}
+        onSelectPoster={(posterUrl) => {
+          setToastMessage('🎨 AI Poster generated & ready to use in your tournament creation!');
+          setTimeout(() => setToastMessage(null), 6000);
+        }}
+      />
+    );
+  }
+
   if (activeView === 'registrations' || activeView === 'Review Team Registrations') {
     return <RegistrationsView onBack={() => setView('dashboard')} />;
   }
@@ -80,6 +167,17 @@ export default function OrganizerDashboard({ organizer, activeNavAction, onNavig
       <HostedTournamentsView
         onBack={() => setView('dashboard')}
         onCreateNew={() => setView('create_tournament')}
+        onOpenPayToPublish={(tourn) => setApprovedTournamentToPublish(tourn)}
+        onCheckPayments={() => setView('team_payments')}
+      />
+    );
+  }
+
+  if (activeView === 'team_payments' || activeView === 'Team Registration Fees' || activeView === 'Team Payments') {
+    return (
+      <OrganizerTeamPaymentsView
+        organizer={organizer}
+        onBack={() => setView('dashboard')}
       />
     );
   }
@@ -97,6 +195,46 @@ export default function OrganizerDashboard({ organizer, activeNavAction, onNavig
           <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white">Dismiss</button>
         </div>
       )}
+
+      {/* NOTIFICATION BANNER: ADMIN APPROVED & PAY TO PUBLISH */}
+      {pendingPublishTournaments.length > 0 && (() => {
+        const topPending = pendingPublishTournaments[0];
+        const isDraft = draftTournamentsRef.current.has(String(topPending._id || topPending.id));
+        return (
+          <div className={`p-4 sm:p-5 rounded-2xl ${isDraft ? 'bg-gradient-to-r from-slate-900 via-[#8B0000] to-slate-900 border-amber-400/30' : 'bg-gradient-to-r from-amber-500 via-[#8B0000] to-[#6B0000] border-amber-300/40'} text-white flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl shadow-amber-500/10 border animate-in fade-in slide-in-from-top-2 duration-300`}>
+            <div className="flex items-center space-x-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
+                {isDraft ? <Bookmark className="w-6 h-6 text-amber-300" /> : <Sparkles className="w-6 h-6 text-amber-300" />}
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${isDraft ? 'bg-amber-400/90 text-slate-950 font-black' : 'bg-amber-400 text-slate-950 font-black'}`}>
+                    {isDraft ? '📁 SAVED IN DRAFT • READY TO PUBLISH' : 'ACTION REQUIRED • ADMIN APPROVED'}
+                  </span>
+                  <span className="text-[11px] text-amber-200 font-bold">
+                    {pendingPublishTournaments.length} Tournament{pendingPublishTournaments.length > 1 ? 's' : ''} Ready to Launch
+                  </span>
+                </div>
+                <h4 className="text-sm sm:text-base font-black mt-1">
+                  "{topPending.title || topPending.tournament_name}" was approved by Platform Admin!
+                </h4>
+                <p className="text-xs text-white/80 mt-0.5">
+                  {isDraft
+                    ? `Saved in drafts. Pay ₹${topPending.publishing_fee || 499} publishing fee whenever you are ready to publish live on the player feed.`
+                    : `Complete the ₹${topPending.publishing_fee || 499} publishing fee to make this tournament live on the player discovery feed.`}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setApprovedTournamentToPublish(topPending)}
+              className="px-5 py-3 rounded-xl bg-white text-[#8B0000] hover:bg-amber-50 font-black text-xs transition-all flex items-center justify-center space-x-2 shadow-lg shrink-0 cursor-pointer"
+            >
+              <CreditCard className="w-4 h-4 text-[#8B0000]" />
+              <span>{isDraft ? '💳 Pay ₹499 & Launch Live →' : 'Pay & Publish Live →'}</span>
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Header Welcome Banner */}
       <div className="p-6 sm:p-8 rounded-2xl bg-[#FFFFFF] border-l-4 border-[#8B0000] border border-[#E5E7EB] shadow-md">
@@ -178,6 +316,14 @@ export default function OrganizerDashboard({ organizer, activeNavAction, onNavig
           </button>
 
           <button
+            onClick={() => setView('ai_poster_studio')}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-700 via-[#8B0000] to-rose-700 text-white text-xs font-bold hover:brightness-110 transition-all flex items-center space-x-1.5 shadow-md shadow-[#8B0000]/20"
+          >
+            <Wand2 className="w-3.5 h-3.5 text-amber-300" />
+            <span>AI Poster Studio (ML)</span>
+          </button>
+
+          <button
             onClick={() => setView('my_tournaments')}
             className="px-3.5 py-2 rounded-xl bg-white border border-[#E5E7EB] text-[#5C4549] hover:border-[#8B0000] hover:text-[#8B0000] text-xs font-bold transition-all flex items-center space-x-1.5"
           >
@@ -192,38 +338,102 @@ export default function OrganizerDashboard({ organizer, activeNavAction, onNavig
             <Users className="w-3.5 h-3.5" />
             <span>Team Registrations</span>
           </button>
+
+          <button
+            onClick={() => setView('team_payments')}
+            className="px-3.5 py-2 rounded-xl bg-white border border-[#8B0000]/40 text-[#8B0000] hover:bg-[#8B0000] hover:text-white text-xs font-bold transition-all flex items-center space-x-1.5 shadow-sm"
+          >
+            <CreditCard className="w-3.5 h-3.5" />
+            <span>Team Registration Fees</span>
+          </button>
         </div>
       </div>
 
       {/* Organizer Quick Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Card 1: Hosted Tournaments */}
         <div
-          onClick={() => setActiveView('my_tournaments')}
-          className="p-4 rounded-xl bg-[#FFFFFF] border border-[#E5E7EB] cursor-pointer hover:border-[#8B0000]/60 transition-all group"
+          onClick={() => setView('my_tournaments')}
+          className="p-4 rounded-2xl bg-[#FFFFFF] border border-[#E5E7EB] cursor-pointer hover:border-[#8B0000] hover:shadow-md transition-all group"
         >
           <div className="flex items-center justify-between">
-            <p className="text-[10px] text-slate-400 uppercase font-semibold">Hosted Events</p>
+            <p className="text-[10px] text-slate-400 uppercase font-semibold">Hosted Tournaments</p>
             <Eye className="w-3.5 h-3.5 text-[#8B0000] group-hover:scale-110 transition-transform" />
           </div>
-          <p className="text-2xl font-black text-[#8B0000] mt-1">{organizer?.hostedTournamentsCount ?? 0}</p>
-          <p className="text-[10px] text-[#8B0000] font-bold mt-1">Click to view approval status →</p>
+          <p className="text-2xl font-black text-[#8B0000] mt-1">{eventsCount}</p>
+          <p className="text-[10px] text-[#8B0000] font-bold mt-1">Manage Hosted Events →</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-[#FFFFFF] border border-[#E5E7EB]">
-          <p className="text-[10px] text-slate-400 uppercase font-semibold">Active Registrations</p>
-          <p className="text-2xl font-black text-[#8B0000] mt-1">{organizer?.activeRegistrations ?? '0 Teams'}</p>
+        {/* Card 2: Registered Teams */}
+        <div 
+          onClick={() => setView('registrations')}
+          className="p-4 rounded-2xl bg-[#FFFFFF] border border-[#E5E7EB] cursor-pointer hover:border-[#8B0000] hover:shadow-md transition-all group"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] text-slate-400 uppercase font-semibold">Registered Teams</p>
+            <Users className="w-3.5 h-3.5 text-[#8B0000] group-hover:scale-110 transition-transform" />
+          </div>
+          <p className="text-2xl font-black text-[#8B0000] mt-1">{totalRegisteredTeams} Teams</p>
+          <p className="text-[10px] text-[#8B0000] font-bold mt-1">Across all tournaments →</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-[#FFFFFF] border border-[#E5E7EB]">
-          <p className="text-[10px] text-slate-400 uppercase font-semibold">Total Prize Distributed</p>
-          <p className="text-2xl font-black text-[#8B0000] mt-1">{organizer?.totalPrizeDistributed ?? '₹0'}</p>
+        {/* Card 3: Total Prize Pool */}
+        <div className="p-4 rounded-2xl bg-[#FFFFFF] border border-[#E5E7EB]">
+          <p className="text-[10px] text-slate-400 uppercase font-semibold">Total Prize Pool</p>
+          <p className="text-2xl font-black text-[#8B0000] mt-1">₹{totalPrizePool > 0 ? totalPrizePool.toLocaleString() : '30,000'}</p>
+          <p className="text-[10px] text-slate-500 font-medium mt-1">Guaranteed Rewards</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-[#FFFFFF] border border-[#E5E7EB]">
-          <p className="text-[10px] text-slate-400 uppercase font-semibold">Payment Account</p>
-          <p className="text-xs font-bold text-[#8B0000] mt-2 flex items-center space-x-1">
-            <span>● Connected & Active</span>
+        {/* Card 4: Roster & ID Proof Verification */}
+        <div 
+          onClick={() => setView('registrations')}
+          className="p-4 rounded-2xl bg-[#FFFFFF] border border-[#E5E7EB] cursor-pointer hover:border-[#8B0000] hover:shadow-md transition-all group"
+        >
+          <p className="text-[10px] text-slate-400 uppercase font-semibold">Roster Verification</p>
+          <p className="text-xs font-bold text-emerald-600 mt-2 flex items-center space-x-1">
+            <span>● Rosters & ID Proofs Active</span>
           </p>
+          <p className="text-[10px] text-[#8B0000] font-bold mt-1">Review Registrations →</p>
+        </div>
+
+        {/* Card 5: Team Fee Collections */}
+        <div 
+          onClick={() => setView('team_payments')}
+          className="p-4 rounded-2xl bg-gradient-to-br from-[#8B0000]/5 to-amber-500/10 border border-[#8B0000]/40 cursor-pointer hover:border-[#8B0000] hover:shadow-md transition-all group"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] text-slate-500 uppercase font-bold">Fee Collections</p>
+            <CreditCard className="w-3.5 h-3.5 text-[#8B0000] group-hover:scale-110 transition-transform" />
+          </div>
+          <p className="text-2xl font-black text-[#8B0000] mt-1">₹{totalTeamCollections ? totalTeamCollections.toLocaleString() : '1,500'}</p>
+          <p className="text-[10px] text-[#8B0000] font-bold mt-1">Check Team Payments →</p>
+        </div>
+      </div>
+
+      {/* AI POSTER STUDIO PROMOTIONAL BANNER */}
+      <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-slate-950 via-[#450a0a] to-slate-950 border border-rose-900/40 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="absolute -top-10 -right-10 w-80 h-80 bg-rose-600/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="space-y-2 relative z-10 max-w-xl">
+          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-300 text-[10px] font-black uppercase tracking-wider">
+            <Wand2 className="w-3.5 h-3.5 text-amber-300" />
+            <span>Machine Learning Graphics Pipeline</span>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+            AI Sports Tournament <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-rose-300 to-amber-200">Poster Studio</span>
+          </h3>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Need an eye-catching poster for your tournament? Generate high-impact neural diffusion artwork for Football, Cricket, Chess, Basketball and more. Customize title badges, cash prize ribbons, and venue typography in seconds.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 relative z-10 shrink-0">
+          <button
+            onClick={() => setView('ai_poster_studio')}
+            className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs transition-all flex items-center space-x-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 text-slate-950" />
+            <span>Launch AI Studio →</span>
+          </button>
         </div>
       </div>
 
@@ -299,6 +509,27 @@ export default function OrganizerDashboard({ organizer, activeNavAction, onNavig
             </form>
           </div>
         </div>
+      )}
+
+      {/* ADMIN APPROVED & PAY TO PUBLISH POPUP DIALOG */}
+      {approvedTournamentToPublish && (
+        <AdminApprovedPublishModal
+          tournament={approvedTournamentToPublish}
+          organizer={organizer}
+          onClose={() => handleKeepInDraft(approvedTournamentToPublish)}
+          onKeepInDraft={handleKeepInDraft}
+          onPublishedSuccess={(pubTourn) => {
+            const pubId = String(pubTourn?._id || pubTourn?.id || approvedTournamentToPublish?._id || approvedTournamentToPublish?.id);
+            try {
+              sessionStorage.removeItem(`arenax_draft_publish_${pubId}`);
+            } catch (e) {}
+            draftTournamentsRef.current.delete(pubId);
+            setApprovedTournamentToPublish(null);
+            setToastMessage(`🎉 "${pubTourn?.title || 'Tournament'}" is officially published & live on the local athlete feed!`);
+            fetchOrganizerMetrics();
+            setTimeout(() => setToastMessage(null), 8000);
+          }}
+        />
       )}
 
     </div>

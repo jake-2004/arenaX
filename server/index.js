@@ -6,6 +6,9 @@ import authRoutes from './routes/authRoutes.js';
 import tournamentRoutes from './routes/tournamentRoutes.js';
 import teamRoutes from './routes/teamRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 import mongoose from 'mongoose';
 
 dotenv.config();
@@ -14,6 +17,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -23,13 +27,48 @@ const __dirname = path.dirname(__filename);
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+  const reqPath = req.path;
+  const primaryPath = path.join(process.cwd(), 'uploads', reqPath);
+
+  if (fs.existsSync(primaryPath) && fs.statSync(primaryPath).isFile()) {
+    return res.sendFile(primaryPath);
+  }
+
+  // Fallback 1: check inside uploads/misc/
+  const filename = path.basename(reqPath);
+  const miscPath = path.join(process.cwd(), 'uploads', 'misc', filename);
+  if (fs.existsSync(miscPath) && fs.statSync(miscPath).isFile()) {
+    return res.sendFile(miscPath);
+  }
+
+  // Fallback 2: check inside uploads/proofs/
+  const proofsPath = path.join(process.cwd(), 'uploads', 'proofs', filename);
+  if (fs.existsSync(proofsPath) && fs.statSync(proofsPath).isFile()) {
+    return res.sendFile(proofsPath);
+  }
+
+  // Fallback 3: check inside uploads/profiles/
+  const profilesPath = path.join(process.cwd(), 'uploads', 'profiles', filename);
+  if (fs.existsSync(profilesPath) && fs.statSync(profilesPath).isFile()) {
+    return res.sendFile(profilesPath);
+  }
+
+  next();
+}, express.static(path.join(process.cwd(), 'uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/ai', aiRoutes);
+
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {

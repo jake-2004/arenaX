@@ -2,14 +2,38 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Bell, LogIn, LogOut, ChevronDown, Search,
   User, Mail, Phone, MapPin, Building,
-  Trophy, Shield, ShieldCheck, Edit3
+  Trophy, Shield, ShieldCheck, Edit3, BadgeCheck
 } from 'lucide-react';
 import ProfileModal from './Common/ProfileModal';
+import { getMyPlayerProfileAPI } from '../services/api';
 
 export default function Navbar({ currentUser, onSelectRole, onOpenAuth, onLogout, onToggleNotifications, unreadCount, onProfileSave }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [isVerifiedPlayer, setIsVerifiedPlayer] = useState(false);
+  const [playerProfile, setPlayerProfile] = useState(null);
   const menuRef = useRef(null);
+
+  // Fetch Player Registration verification status for Local User
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'user') {
+      const checkVerification = async () => {
+        const res = await getMyPlayerProfileAPI();
+        if (res && res.player) {
+          setPlayerProfile(res.player);
+          if (res.player.verification_status === 'Approved') {
+            setIsVerifiedPlayer(true);
+          } else {
+            setIsVerifiedPlayer(false);
+          }
+        }
+      };
+      checkVerification();
+    } else {
+      setIsVerifiedPlayer(false);
+      setPlayerProfile(null);
+    }
+  }, [currentUser]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -102,11 +126,22 @@ export default function Navbar({ currentUser, onSelectRole, onOpenAuth, onLogout
                     </div>
                   )}
                   <div className="text-left hidden sm:block">
-                    <div className="text-xs font-semibold text-[#2C1418] leading-tight">{currentUser.name}</div>
-                    <div className="text-[10px] text-[#8B0000] font-medium flex items-center gap-1">
-                      {roleIcon[currentUser.role]}
-                      {roleLabels[currentUser.role]}
+                    <div className="flex items-center space-x-1">
+                      <span className="text-xs font-semibold text-[#2C1418] leading-tight">{currentUser.name}</span>
+                      {isVerifiedPlayer && (
+                        <BadgeCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" title="Verified Player" />
+                      )}
                     </div>
+                    {isVerifiedPlayer ? (
+                      <div className="text-[10px] text-emerald-700 font-black flex items-center gap-0.5">
+                        <span>✅ Verified Player</span>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-[#8B0000] font-medium flex items-center gap-1">
+                        {roleIcon[currentUser.role]}
+                        {roleLabels[currentUser.role]}
+                      </div>
+                    )}
                   </div>
                   <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${showProfileMenu ? 'rotate-180' : ''}`} />
                 </button>
@@ -134,10 +169,17 @@ export default function Navbar({ currentUser, onSelectRole, onOpenAuth, onLogout
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-black text-white truncate">{currentUser.name}</p>
                           <p className="text-[11px] text-white/70 truncate">{currentUser.email}</p>
-                          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-white/15 border border-white/25 text-white text-[10px] font-bold">
-                            {roleIcon[currentUser.role]}
-                            {roleLabels[currentUser.role]}
-                          </span>
+                          {isVerifiedPlayer ? (
+                            <span className="inline-flex items-center gap-1 mt-1 px-2.5 py-0.5 rounded-full bg-emerald-500/30 border border-emerald-300/50 text-emerald-100 text-[10px] font-black uppercase shadow-sm">
+                              <BadgeCheck className="w-3.5 h-3.5 text-emerald-300" />
+                              Verified Player #{playerProfile?.numeric_player_id}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-white/15 border border-white/25 text-white text-[10px] font-bold">
+                              {roleIcon[currentUser.role]}
+                              {roleLabels[currentUser.role]}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import {
   Home, Trophy, Users, Settings, Activity, ShieldCheck,
   PlusCircle, Clock, Upload, CheckCircle2, Building,
-  FileText, Sparkles, UserCheck, Layers, BadgeCheck, Radio, FileCheck
+  FileText, Sparkles, UserCheck, Layers, BadgeCheck, Radio, FileCheck, CreditCard,
+  Bot, MessageSquare, Wand2
 } from 'lucide-react';
 
 export default function Sidebar({ userRole, activeNav: externalActiveNav, onNavSelect }) {
@@ -27,7 +28,10 @@ export default function Sidebar({ userRole, activeNav: externalActiveNav, onNavS
           title: 'MANAGEMENT',
           items: [
             { id: 'dashboard', label: 'Admin Overview', icon: Home },
+            { id: 'payments', label: 'Payment Management', icon: CreditCard, badge: 'Razorpay' },
             { id: 'pending_tournaments', label: 'Pending Tournaments', icon: Trophy, badge: 'Verification' },
+            { id: 'approved_tournaments', label: 'Approved Tournaments', icon: BadgeCheck, badge: 'Published' },
+            { id: 'player_verification', label: 'Player ID Approvals', icon: UserCheck, badge: 'ID Proofs' },
             { id: 'organizers', label: 'Organizer Admission', icon: Building, badge: 'Review' }
           ]
         },
@@ -62,6 +66,7 @@ export default function Sidebar({ userRole, activeNav: externalActiveNav, onNavS
           items: [
             { id: 'dashboard', label: 'Organizer Overview', icon: Home },
             { id: 'create_tournament', label: 'Host New Tournament', icon: PlusCircle, highlight: true },
+            { id: 'ai_poster_studio', label: 'AI Poster Studio', icon: Wand2, badge: 'AI ML', highlight: true },
             { id: 'my_tournaments', label: 'My Tournaments', icon: Trophy, badge: 'View Teams' }
           ]
         },
@@ -69,6 +74,12 @@ export default function Sidebar({ userRole, activeNav: externalActiveNav, onNavS
           title: 'TEAMS & ROSTER',
           items: [
             { id: 'registrations', label: 'Review Team Registrations', icon: Users, badge: 'Approvals' }
+          ]
+        },
+        {
+          title: 'FINANCES & PAYMENTS',
+          items: [
+            { id: 'team_payments', label: 'Team Registration Fees', icon: CreditCard, badge: 'Razorpay' }
           ]
         },
         {
@@ -100,8 +111,21 @@ export default function Sidebar({ userRole, activeNav: externalActiveNav, onNavS
         {
           title: 'MY TEAMS & PLAYER ID',
           items: [
+            { id: 'register_as_player', label: 'Register as Player', icon: UserCheck, badge: 'Player ID' },
             { id: 'my_teams', label: 'My Teams & Rosters', icon: Users },
             { id: 'upload_player_id', label: 'Upload Player ID Proof', icon: FileCheck }
+          ]
+        },
+        {
+          title: 'CAREER & PERFORMANCE',
+          items: [
+            { id: 'my_career_stats', label: 'Match Results & Stats', icon: Trophy, badge: 'Career' }
+          ]
+        },
+        {
+          title: 'HELP & AI ASSISTANT',
+          items: [
+            { id: 'ai_assistant', label: 'AI Doubt Clearing Bot', icon: Bot, badge: 'Live AI', highlight: true }
           ]
         },
         {

@@ -14,17 +14,17 @@ uploadDirs.forEach(dir => {
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     let dest = 'uploads/';
-    if (file.fieldname === 'team_proof' || file.fieldname === 'id_proof') {
+    if (file.fieldname === 'team_proof' || file.fieldname === 'id_proof' || file.fieldname === 'id_proof_doc') {
       dest += 'proofs/';
     } else if (file.fieldname === 'poster') {
       dest += 'posters/';
-    } else if (file.fieldname === 'profile_image' || file.fieldname === 'logo') {
+    } else if (file.fieldname === 'profile_image' || file.fieldname === 'profile_photo' || file.fieldname === 'logo') {
       dest += 'profiles/';
     } else {
       dest += 'misc/';
     }
     
-    // Ensure misc exists if used
+    // Ensure directory exists
     const fullPath = path.join(process.cwd(), dest);
     if (!fs.existsSync(fullPath)) {
       fs.mkdirSync(fullPath, { recursive: true });

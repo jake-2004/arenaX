@@ -53,12 +53,15 @@ export const TblTeamSchema = new mongoose.Schema({
 // 4. Tbl_players
 export const TblPlayerSchema = new mongoose.Schema({
   player_id: { type: Number },
-  team_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTeam', required: true },
+  numeric_player_id: { type: Number, index: true },
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblUser' },
+  team_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTeam' },
   player_name: { type: String, required: true },
   date_of_birth: { type: Date },
   gender: { type: String, enum: ['Male', 'Female', 'Other'] },
   email: { type: String },
   address: { type: String },
+  sport: { type: String },
   jersey_number: { type: String },
   position: { type: String },
   photo: { type: String },
@@ -86,41 +89,136 @@ export const TblTournamentSchema = new mongoose.Schema({
   max_teams: { type: Number, default: 16 },
   poster_url: { type: String },
   rules: { type: String },
-  status: { type: String, enum: ['Pending', 'Approved', 'Rejected', 'Completed'], default: 'Pending' }
+  status: { type: String, enum: ['Pending', 'Admin_Approved', 'Approved', 'Rejected', 'Completed'], default: 'Pending' },
+  admin_approved: { type: Boolean, default: false },
+  admin_approved_at: { type: Date },
+  publishing_fee_paid: { type: Boolean, default: false },
+  publishing_payment_id: { type: String, default: '' },
+  publishing_fee: { type: Number, default: 499 },
+  is_started: { type: Boolean, default: false },
+  started_at: { type: Date }
 }, { collection: 'tbl_tournaments', timestamps: true });
 
 // 6. Tbl_tournament_posters
 export const TblTournamentPosterSchema = new mongoose.Schema({
   poster_id: { type: Number },
-  tournament_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTournament' },
-  organizer_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblOrganizer' },
+  tournament_id: { type: mongoose.Schema.Types.Mixed, ref: 'TblTournament' },
+  organizer_id: { type: mongoose.Schema.Types.Mixed, ref: 'TblOrganizer' },
   poster_image: { type: String },
   poster_url: { type: String },
   ai_generated: { type: Boolean, default: true },
-  approval_status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' }
+  approval_status: { type: String, enum: ['Pending', 'Admin_Approved', 'Approved', 'Rejected'], default: 'Pending' },
+  admin_approved: { type: Boolean, default: false },
+  admin_approved_at: { type: Date },
+  publishing_fee_paid: { type: Boolean, default: false },
+  publishing_payment_id: { type: String },
+  publishing_fee: { type: Number, default: 499 }
 }, { collection: 'tbl_tournament_posters', timestamps: true });
 
 // 7. Tbl_team_registrations
 export const TblTeamRegistrationSchema = new mongoose.Schema({
   registration_id: { type: Number },
-  tournament_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTournament', required: true },
-  team_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTeam', required: true },
-  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblUser', required: true }, // Added for tracking who registered
+  tournament_id: { type: mongoose.Schema.Types.Mixed, required: true },
+  team_id: { type: mongoose.Schema.Types.Mixed, required: true },
+  user_id: { type: mongoose.Schema.Types.Mixed, required: true },
+  team_name: { type: String },
+  sport: { type: String },
+  players: { type: Array, default: [] },
   registration_date: { type: Date, default: Date.now },
-  payment_status: { type: String, enum: ['Pending', 'Paid'], default: 'Pending' },
-  registration_status: { type: String, enum: ['Pending', 'Approved', 'Rejected', 'Cancelled'], default: 'Pending' }
-}, { collection: 'tbl_team_registrations', timestamps: true });
+  payment_status: { type: String, default: 'Pending' },
+  registration_status: { type: String, default: 'Pending' }
+}, { collection: 'tbl_team_registrations', timestamps: true, strict: false });
 
 // 8. Tbl_matches
 export const TblMatchSchema = new mongoose.Schema({
   match_id: { type: Number },
-  tournament_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTournament', required: true },
-  team1_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTeam', required: true },
-  team2_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTeam', required: true },
-  match_date: { type: Date, required: true },
+  tournament_id: { type: mongoose.Schema.Types.Mixed, required: true },
+  team1_name: { type: String, required: true },
+  team2_name: { type: String, required: true },
+  team1_id: { type: mongoose.Schema.Types.Mixed },
+  team2_id: { type: mongoose.Schema.Types.Mixed },
+  match_date: { type: String, required: true },
+  match_time: { type: String, default: '10:00 AM' },
   venue: { type: String, required: true },
-  round: { type: String, required: true },
-  status: { type: String, enum: ['Upcoming', 'Live', 'Completed'], default: 'Upcoming' }
+  round: { type: String, default: 'Round 1' },
+  status: { type: String, enum: ['Upcoming', 'Live', 'Completed'], default: 'Upcoming' },
+  team1_score: { type: Number, default: 0 },
+  team2_score: { type: Number, default: 0 },
+  winner_team: { type: String, default: '' },
+  winner_team_id: { type: mongoose.Schema.Types.Mixed },
+  score_summary: { type: String, default: '' },
+  player_of_match: { type: String, default: '' },
+  
+  // Football / Soccer Stats
+  top_scorers: [
+    {
+      player_name: { type: String, required: true },
+      team_name: { type: String, default: '' },
+      goals: { type: Number, default: 1 }
+    }
+  ],
+  top_assists: [
+    {
+      player_name: { type: String, required: true },
+      team_name: { type: String, default: '' },
+      assists: { type: Number, default: 1 }
+    }
+  ],
+  yellow_cards: [
+    {
+      player_name: { type: String, required: true },
+      team_name: { type: String, default: '' },
+      count: { type: Number, default: 1 }
+    }
+  ],
+  red_cards: [
+    {
+      player_name: { type: String, required: true },
+      team_name: { type: String, default: '' },
+      count: { type: Number, default: 1 }
+    }
+  ],
+
+  // Cricket Stats (Runs, Wickets, Overs)
+  cricket_team1_score: { type: String, default: '' }, // e.g. "175/4 (20.0)"
+  cricket_team2_score: { type: String, default: '' }, // e.g. "160/9 (20.0)"
+  top_batsmen: [
+    {
+      player_name: { type: String, required: true },
+      team_name: { type: String, default: '' },
+      runs: { type: Number, default: 0 },
+      balls: { type: Number, default: 0 },
+      fours: { type: Number, default: 0 },
+      sixes: { type: Number, default: 0 }
+    }
+  ],
+  top_bowlers: [
+    {
+      player_name: { type: String, required: true },
+      team_name: { type: String, default: '' },
+      wickets: { type: Number, default: 0 },
+      overs: { type: String, default: '4.0' },
+      runs_conceded: { type: Number, default: 0 }
+    }
+  ],
+
+  // Chess Stats (1-0, 0-1, 0.5-0.5, Checkmate, Resignation)
+  chess_outcome: { type: String, default: '' }, // '1 - 0', '0 - 1', '0.5 - 0.5'
+  chess_win_method: { type: String, default: '' }, // 'Checkmate', 'Resignation', 'Time Forfeit', 'Stalemate', 'Draw'
+  chess_moves_count: { type: Number, default: 0 },
+
+  // Badminton / Tennis Stats (Sets e.g. 21-18, 19-21, 21-15)
+  set_scores: [{ type: String }],
+
+  events: [
+    {
+      event_type: { type: String, default: 'goal' },
+      player_name: { type: String, required: true },
+      team_name: { type: String, default: '' },
+      detail: { type: String, default: '' },
+      time: { type: String, default: '' }
+    }
+  ]
 }, { collection: 'tbl_matches', timestamps: true });
 
 // 9. Tbl_live_scores
@@ -144,20 +242,50 @@ export const TblFixtureSchema = new mongoose.Schema({
 // 11. Tbl_payments
 export const TblPaymentSchema = new mongoose.Schema({
   payment_id: { type: Number },
-  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblUser', required: true },
+  user_id: { type: mongoose.Schema.Types.ObjectId },
+  user_name: { type: String },
+  user_email: { type: String },
+  user_phone: { type: String },
   tournament_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTournament' },
+  tournament_title: { type: String },
+  poster_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTournamentPoster' },
+  poster_title: { type: String },
+  registration_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblTeamRegistration' },
+  team_name: { type: String },
   payment_type: { type: String, enum: ['Hosting', 'Poster', 'Registration'], required: true },
   amount: { type: Number, required: true },
-  payment_status: { type: String, enum: ['Pending', 'Success', 'Failed'], default: 'Pending' }
+  currency: { type: String, default: 'INR' },
+  payment_status: { type: String, enum: ['Pending', 'Success', 'Failed', 'Refunded', 'Partially Refunded'], default: 'Pending' },
+  payment_method: { type: String, default: 'Razorpay' },
+  razorpay_payment_id: { type: String },
+  razorpay_order_id: { type: String },
+  razorpay_signature: { type: String },
+  failure_reason: { type: String },
+  refund_id: { type: String },
+  refund_amount: { type: Number, default: 0 },
+  refund_reason: { type: String },
+  refund_status: { type: String, enum: ['None', 'Pending', 'Processed', 'Failed'], default: 'None' },
+  refund_date: { type: Date },
+  payment_date: { type: Date, default: Date.now },
+  notes: { type: mongoose.Schema.Types.Mixed, default: {} }
 }, { collection: 'tbl_payments', timestamps: true });
 
 // 12. Tbl_notifications
 export const TblNotificationSchema = new mongoose.Schema({
   notification_id: { type: Number },
-  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TblUser', required: true },
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  role: { type: String, enum: ['admin', 'organizer', 'user', 'all'], default: null },
   title: { type: String, required: true },
   message: { type: String, required: true },
+  type: { 
+    type: String, 
+    enum: ['tournament_request', 'player_request', 'organizer_request', 'tournament_status', 'organizer_status', 'player_status', 'registration_status', 'team_invitation', 'match_fixtures', 'system'],
+    default: 'system' 
+  },
+  action_nav: { type: String, default: 'dashboard' },
+  metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   is_read: { type: Boolean, default: false },
+  read_by: [{ type: String }],
   created_at: { type: Date, default: Date.now }
 }, { collection: 'tbl_notifications', timestamps: true });
 

@@ -109,19 +109,49 @@ export default function RegisterForm({ onSubmitRegister, onSwitchToLogin }) {
 
   // Password strength calculation
   const getPasswordStrength = () => {
-    if (!password) return { label: '', color: '', percent: 0 };
+    if (!password) return { label: '', color: 'bg-slate-200', percent: 0 };
     let score = 0;
-    if (password.length >= 8) score += 35;
+    if (password.length >= 6) score += 25;
     if (/[A-Z]/.test(password)) score += 25;
-    if (/[0-9]/.test(password)) score += 20;
-    if (/[^A-Za-z0-9]/.test(password)) score += 20;
+    if (/[0-9]/.test(password)) score += 25;
+    if (/[^A-Za-z0-9]/.test(password)) score += 25;
 
-    if (score < 40) return { label: 'Weak', color: 'bg-[#FFABBA]', percent: score };
-    if (score < 75) return { label: 'Medium', color: 'bg-[#6B0000]', percent: score };
-    return { label: 'Strong', color: 'bg-[#8B0000]', percent: 100 };
+    if (score <= 25) return { label: 'Weak', color: 'bg-rose-500', percent: 25 };
+    if (score <= 50) return { label: 'Fair', color: 'bg-amber-500', percent: 50 };
+    if (score <= 75) return { label: 'Good', color: 'bg-emerald-500', percent: 75 };
+    return { label: 'Strong', color: 'bg-emerald-600', percent: 100 };
+  };
+
+  // Live Validation Helper for Password
+  const validatePasswordLive = (pass) => {
+    if (!pass) return { isValid: false, message: 'Password is required' };
+    if (pass.length < 6) return { isValid: false, message: 'Min 6 characters' };
+    if (!/[A-Z]/.test(pass)) return { isValid: false, message: 'Needs 1 uppercase letter (A-Z)' };
+    if (!/[0-9]/.test(pass)) return { isValid: false, message: 'Needs 1 number (0-9)' };
+    if (!/[^A-Za-z0-9]/.test(pass)) return { isValid: false, message: 'Needs 1 special character (!@#$)' };
+    return { isValid: true, message: '✓ Strong Password (Valid)' };
+  };
+
+  // Live Validation Helper for Email
+  const validateEmailLive = (emailStr) => {
+    if (!emailStr.trim()) return { isValid: false, message: 'Email address is required' };
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(emailStr.trim())) return { isValid: false, message: 'Invalid email format (e.g. user@domain.com)' };
+    return { isValid: true, message: '✓ Valid Email Format' };
+  };
+
+  // Live Validation Helper for Phone Number
+  const validatePhoneLive = (phoneStr) => {
+    if (!phoneStr.trim()) return { isValid: false, message: 'Phone number is required' };
+    const cleanPhone = phoneStr.replace(/[\s\-\(\)]/g, '');
+    if (!/^\d{10,15}$/.test(cleanPhone)) return { isValid: false, message: 'Enter 10-15 digit mobile number' };
+    return { isValid: true, message: '✓ Valid Mobile Number' };
   };
 
   const strength = getPasswordStrength();
+  const passVal = validatePasswordLive(password);
+  const emailVal = validateEmailLive(email);
+  const phoneVal = validatePhoneLive(phoneRaw);
 
   const handleRoleChange = (newRole) => {
     setRole(newRole);
@@ -210,10 +240,6 @@ export default function RegisterForm({ onSubmitRegister, onSwitchToLogin }) {
         }
         if (!selectedSports || selectedSports.length === 0) {
           setError('Please select at least one favorite sport.');
-          return;
-        }
-        if (!teamName || teamName.trim() === '') {
-          setError('Please enter your team or club display name.');
           return;
         }
       } else if (role === 'organizer') {
@@ -310,9 +336,16 @@ export default function RegisterForm({ onSubmitRegister, onSwitchToLogin }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#5C4549] mb-1">
-                Email Address
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-[#5C4549]">
+                  Email Address *
+                </label>
+                {email && (
+                  <span className={`text-[10px] font-bold ${emailVal.isValid ? 'text-emerald-600' : 'text-rose-500'}`}>
+                    {emailVal.isValid ? emailVal.message : `✕ ${emailVal.message}`}
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -320,23 +353,34 @@ export default function RegisterForm({ onSubmitRegister, onSwitchToLogin }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g. alex@arenax.io"
-                  className="w-full bg-[#FFFFFF] border border-[#E5E7EB] focus:border-[#8B0000] text-[#2C1418] text-xs rounded-xl pl-9 pr-4 py-2.5 focus:outline-none transition-all"
+                  className={`w-full bg-[#FFFFFF] border text-[#2C1418] text-xs rounded-xl pl-9 pr-4 py-2.5 focus:outline-none transition-all font-mono ${
+                    email && (emailVal.isValid ? 'border-emerald-400' : 'border-rose-300')
+                  }`}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#5C4549] mb-1">
-                Create Password
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-[#5C4549]">
+                  Create Password *
+                </label>
+                {password && (
+                  <span className={`text-[10px] font-bold ${passVal.isValid ? 'text-emerald-600' : 'text-rose-500'}`}>
+                    {passVal.isValid ? passVal.message : `✕ ${passVal.message}`}
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
-                  className="w-full bg-[#FFFFFF] border border-[#E5E7EB] focus:border-[#8B0000] text-[#2C1418] text-xs rounded-xl pl-9 pr-10 py-2.5 focus:outline-none transition-all"
+                  placeholder="At least 6 characters, 1 uppercase, 1 number, 1 special symbol"
+                  className={`w-full bg-[#FFFFFF] border text-[#2C1418] text-xs rounded-xl pl-9 pr-10 py-2.5 focus:outline-none transition-all font-mono ${
+                    password && (passVal.isValid ? 'border-emerald-400' : 'border-rose-300')
+                  }`}
                 />
                 <button
                   type="button"
@@ -365,9 +409,16 @@ export default function RegisterForm({ onSubmitRegister, onSwitchToLogin }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#5C4549] mb-1">
-                Confirm Password
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-[#5C4549]">
+                  Confirm Password *
+                </label>
+                {confirmPassword && (
+                  <span className={`text-[10px] font-bold ${confirmPassword === password ? 'text-emerald-600' : 'text-rose-500'}`}>
+                    {confirmPassword === password ? '✓ Passwords Match' : '✕ Passwords do not match'}
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -375,7 +426,9 @@ export default function RegisterForm({ onSubmitRegister, onSwitchToLogin }) {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter your password"
-                  className="w-full bg-[#FFFFFF] border border-[#E5E7EB] focus:border-[#8B0000] text-[#2C1418] text-xs rounded-xl pl-9 pr-10 py-2.5 focus:outline-none transition-all"
+                  className={`w-full bg-[#FFFFFF] border text-[#2C1418] text-xs rounded-xl pl-9 pr-10 py-2.5 focus:outline-none transition-all font-mono ${
+                    confirmPassword && (confirmPassword === password ? 'border-emerald-400' : 'border-rose-300')
+                  }`}
                 />
                 <button
                   type="button"
@@ -433,29 +486,6 @@ export default function RegisterForm({ onSubmitRegister, onSwitchToLogin }) {
                       className="w-full bg-[#FFFFFF] border border-[#E5E7EB] focus:border-[#8B0000] text-[#2C1418] text-xs rounded-xl pl-9 pr-4 py-2.5 focus:outline-none font-semibold"
                     />
                   </div>
-
-                  {/* Popular Location Chips */}
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {['London, UK', 'Manchester, UK', 'Birmingham, UK', 'Leeds, UK'].map((city) => (
-                      <button
-                        key={city}
-                        type="button"
-                        onClick={() => setLocation(city)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                          location === city
-                            ? 'bg-[#8B0000] text-white shadow-sm'
-                            : 'bg-[#FFFFFF] border border-[#E5E7EB] text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        📍 {city}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="p-2 rounded-lg bg-[#8B0000]/10 border border-[#8B0000]/20 text-[11px] text-[#8B0000] flex items-center space-x-1.5">
-                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    <span>We will prioritize sports tournaments within 15 miles of <strong>{location || 'your region'}</strong>.</span>
-                  </div>
                 </div>
 
                 <div>
@@ -482,19 +512,6 @@ export default function RegisterForm({ onSubmitRegister, onSwitchToLogin }) {
                     })}
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[#5C4549] mb-1">
-                    Team Name (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={teamName}
-                    onChange={(e) => setTeamName(e.target.value)}
-                    placeholder="e.g. East End Eagles FC"
-                    className="w-full bg-[#FFFFFF] border border-[#E5E7EB] focus:border-[#8B0000] text-[#2C1418] text-xs rounded-xl px-3 py-2.5 focus:outline-none"
-                  />
-                </div>
               </>
             )}
 
@@ -517,14 +534,16 @@ export default function RegisterForm({ onSubmitRegister, onSwitchToLogin }) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#5C4549] mb-1 flex items-center justify-between">
-                    <span>Contact Phone Number <span className="text-[#8B0000]">*</span></span>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-[#5C4549]">
+                      Contact Phone Number <span className="text-[#8B0000]">*</span>
+                    </label>
                     {phoneRaw && (
-                      <span className="text-[10px] text-[#8B0000] font-mono">
-                        Formatted: {countryCode} {phoneRaw}
+                      <span className={`text-[10px] font-bold ${phoneVal.isValid ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {phoneVal.isValid ? phoneVal.message : `✕ ${phoneVal.message}`}
                       </span>
                     )}
-                  </label>
+                  </div>
 
                   <div className="flex space-x-2">
                     {/* Country Code Dropdown */}
@@ -550,7 +569,9 @@ export default function RegisterForm({ onSubmitRegister, onSwitchToLogin }) {
                         value={phoneRaw}
                         onChange={(e) => setPhoneRaw(e.target.value)}
                         placeholder="7911 123456"
-                        className="w-full bg-[#FFFFFF] border border-[#E5E7EB] focus:border-[#8B0000] text-[#2C1418] text-xs font-mono rounded-xl px-3 py-2.5 focus:outline-none"
+                        className={`w-full bg-[#FFFFFF] border text-[#2C1418] text-xs font-mono rounded-xl px-3 py-2.5 focus:outline-none transition-all ${
+                          phoneRaw && (phoneVal.isValid ? 'border-emerald-400' : 'border-rose-300')
+                        }`}
                       />
                     </div>
                   </div>

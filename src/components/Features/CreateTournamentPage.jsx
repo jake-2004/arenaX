@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ArrowLeft, MapPin, Trophy, CheckCircle2, Image as ImageIcon, AlertCircle, Shield, Upload, FileImage, ExternalLink } from 'lucide-react';
-import { createTournamentAPI } from '../../services/api';
+import { ArrowLeft, MapPin, Trophy, CheckCircle2, Image as ImageIcon, AlertCircle, Shield, Upload, FileImage, ExternalLink, Wand2, Sparkles, X, Palette, RefreshCw } from 'lucide-react';
+import { createTournamentAPI, generateAIPosterAPI, getFullUploadUrl } from '../../services/api';
+import AIPosterStudio from './AIPosterStudio';
 
 const PRESET_POSTERS = [
   { id: 'p1', name: 'Football Championship', url: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=800&q=80', sport: 'Football' },
@@ -59,6 +60,43 @@ export default function CreateTournamentPage({ organizer, onBack, onTournamentCr
   const [customUploadName, setCustomUploadName] = useState('');
   const [posterSourceType, setPosterSourceType] = useState('upload'); // 'upload' | 'preset' | 'url'
   const [rules, setRules] = useState('Standard league rules apply. All teams must report 15 mins prior to kickoff.');
+
+  // AI Poster Studio State
+  const [showAiStudioModal, setShowAiStudioModal] = useState(false);
+  const [isGeneratingInlineAi, setIsGeneratingInlineAi] = useState(false);
+  const [aiStyle, setAiStyle] = useState('stadium_floodlights');
+  const [inlineAiPrompt, setInlineAiPrompt] = useState('');
+
+  const handleQuickAiGenerate = async () => {
+    if (!title.trim()) {
+      setError('Please provide a Tournament Title in Section 1 before generating AI artwork.');
+      return;
+    }
+    setIsGeneratingInlineAi(true);
+    setError('');
+    try {
+      const res = await generateAIPosterAPI({
+        sport,
+        title,
+        style: aiStyle,
+        customPrompt: inlineAiPrompt,
+        venue: location,
+        prizePool,
+        dates: startDate ? `Starts ${startDate}` : ''
+      });
+      if (res && res.success && res.poster_url) {
+        setPosterUrl(res.poster_url);
+        setCustomUploadName(`AI Poster: ${sport} (${aiStyle.replace(/_/g, ' ')})`);
+        setPosterSourceType('ai_studio');
+      } else {
+        setError(res?.message || 'AI Generation encountered an issue. Please try again.');
+      }
+    } catch (err) {
+      setError('Failed to generate AI poster: ' + err.message);
+    } finally {
+      setIsGeneratingInlineAi(false);
+    }
+  };
 
   const handleSportChange = (selectedSport) => {
     setSport(selectedSport);
@@ -368,7 +406,20 @@ export default function CreateTournamentPage({ organizer, onBack, onTournamentCr
                 }`}
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                <span>Option C: Custom Web Image Link</span>
+                <span>Option C: Custom Link</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPosterSourceType('ai_studio')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
+                  posterSourceType === 'ai_studio' 
+                    ? 'bg-gradient-to-r from-purple-700 via-[#8B0000] to-rose-700 text-white shadow-md' 
+                    : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200'
+                }`}
+              >
+                <Wand2 className="w-3.5 h-3.5 text-amber-300" />
+                <span>Option D: 🤖 AI Poster Studio (Instant ML)</span>
               </button>
             </div>
 
@@ -442,10 +493,93 @@ export default function CreateTournamentPage({ organizer, onBack, onTournamentCr
               </div>
             )}
 
+            {/* OPTION D: AI POSTER STUDIO (ML GENERATION) */}
+            {posterSourceType === 'ai_studio' && (
+              <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-slate-950 via-[#2d090f] to-slate-950 border border-[#8B0000]/50 text-white space-y-4 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+                  <div>
+                    <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[10px] font-black uppercase tracking-wider mb-1">
+                      <Sparkles className="w-3 h-3 text-amber-300" />
+                      <span>Neural ML Diffusion Pipeline</span>
+                    </div>
+                    <h4 className="text-sm font-black text-white">Generate Custom Tournament Poster with ML</h4>
+                    <p className="text-xs text-white/70">
+                      Generate an exclusive 8K poster tailored for {sport} using our ML graphics engine.
+                    </p>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowAiStudioModal(true)}
+                    className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-amber-300 text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0 cursor-pointer"
+                  >
+                    <Palette className="w-3.5 h-3.5" />
+                    <span>Open Advanced Studio Modal ↗</span>
+                  </button>
+                </div>
+
+                {/* Quick ML Controls */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-white/80 mb-1">Visual Art Style</label>
+                    <select
+                      value={aiStyle}
+                      onChange={(e) => setAiStyle(e.target.value)}
+                      className="w-full bg-slate-900 border border-white/20 focus:border-[#8B0000] text-white text-xs rounded-xl px-3 py-2.5 focus:outline-none"
+                    >
+                      <option value="stadium_floodlights">🏟️ Stadium Floodlights (Realistic & Cinematic)</option>
+                      <option value="neon_cyberpunk">⚡ Cyberpunk Neon (Electric Glow)</option>
+                      <option value="gold_championship">🏆 Championship Gold (Regal & Prestigious)</option>
+                      <option value="comic_action">💥 Comic Action (Heroic Halftone)</option>
+                      <option value="cosmic_arena">🌌 Cosmic Arena (Epic Galactic Clash)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-white/80 mb-1">
+                      Custom Prompt Enhancer <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={inlineAiPrompt}
+                      onChange={(e) => setInlineAiPrompt(e.target.value)}
+                      placeholder="e.g. dramatic rainy night, gold confetti explosion, hero captain"
+                      className="w-full bg-slate-900 border border-white/20 focus:border-[#8B0000] text-white text-xs rounded-xl px-3 py-2.5 focus:outline-none placeholder:text-white/40"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                  <p className="text-[11px] text-white/60">
+                    💡 ML model incorporates "{title || 'Tournament Title'}" for {sport}.
+                  </p>
+                  
+                  <button
+                    type="button"
+                    disabled={isGeneratingInlineAi}
+                    onClick={handleQuickAiGenerate}
+                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-rose-600 to-[#8B0000] text-white font-extrabold text-xs hover:brightness-110 shadow-lg shadow-rose-900/30 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isGeneratingInlineAi ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Rendering with ML Diffusion...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="w-3.5 h-3.5 text-amber-300" />
+                        <span>⚡ Generate Poster with ML</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* LIVE POSTER IMAGE PREVIEW CARD */}
             {posterUrl && (
               <div className="p-3 rounded-xl bg-[#FFFFFF] border border-[#E5E7EB] flex items-center space-x-4">
-                <img src={posterUrl} alt="Poster Preview" className="w-16 h-20 object-cover rounded-lg border border-[#FFABBA] shrink-0" />
+                <img src={getFullUploadUrl(posterUrl)} alt="Poster Preview" className="w-16 h-20 object-cover rounded-lg border border-[#FFABBA] shrink-0" />
                 <div>
                   <span className="text-[10px] font-bold text-[#8B0000] bg-[#8B0000]/10 px-2 py-0.5 rounded border border-[#8B0000]/30">
                     Selected Poster Preview
@@ -503,6 +637,40 @@ export default function CreateTournamentPage({ organizer, onBack, onTournamentCr
         </div>
 
       </form>
+
+      {/* FULL SCREEN AI POSTER STUDIO MODAL */}
+      {showAiStudioModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-[#121217] border border-white/10 rounded-3xl max-w-6xl w-full max-h-[92vh] overflow-y-auto shadow-2xl relative p-4 sm:p-6 text-white">
+            <button
+              type="button"
+              onClick={() => setShowAiStudioModal(false)}
+              className="absolute top-5 right-5 z-20 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <AIPosterStudio
+              organizer={organizer}
+              embedded={true}
+              initialTournament={{
+                title: title || 'ArenaX Tournament',
+                sport: sport || 'Football',
+                location: location || 'Stadium Arena',
+                prizePool: prizePool || '₹50,000',
+                posterUrl: posterUrl
+              }}
+              onSelectPoster={(url) => {
+                setPosterUrl(url);
+                setCustomUploadName(`AI Poster Studio Graphic (${sport})`);
+                setPosterSourceType('ai_studio');
+                setShowAiStudioModal(false);
+              }}
+              onBack={() => setShowAiStudioModal(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
