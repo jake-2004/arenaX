@@ -30,11 +30,30 @@ router.get('/', async (req, res) => {
     const combined = [];
     const seenTitles = new Set();
 
+    // High-performance batch aggregation for registration counts
+    const allIds = [
+      ...tblTournaments.map(t => t._id),
+      ...feedTournaments.map(ft => ft._id)
+    ];
+    const queryIds = Array.from(new Set([
+      ...allIds,
+      ...allIds.map(id => id ? id.toString() : '')
+    ])).filter(Boolean);
+
+    const regCountsAgg = await TblTeamRegistration.aggregate([
+      { $match: { tournament_id: { $in: queryIds } } },
+      { $group: { _id: '$tournament_id', count: { $sum: 1 } } }
+    ]).catch(() => []);
+
+    const regMap = new Map();
+    for (const r of regCountsAgg) {
+      if (r && r._id) regMap.set(String(r._id), r.count);
+    }
+    const getRegCount = (id) => (regMap.get(String(id)) || 0);
+
     for (const t of tblTournaments) {
       seenTitles.add((t.tournament_name || '').toLowerCase());
-      const regCount = await TblTeamRegistration.countDocuments({
-        $or: [{ tournament_id: t._id }, { tournament_id: t._id.toString() }]
-      });
+      const regCount = getRegCount(t._id);
       const registeredCount = Math.max(t.registered_teams_count || t.registeredTeamsCount || 0, regCount);
 
       combined.push({
@@ -58,9 +77,7 @@ router.get('/', async (req, res) => {
 
     for (const ft of feedTournaments) {
       if (!seenTitles.has((ft.title || '').toLowerCase())) {
-        const regCount = await TblTeamRegistration.countDocuments({
-          $or: [{ tournament_id: ft._id }, { tournament_id: ft._id.toString() }]
-        });
+        const regCount = getRegCount(ft._id);
         const registeredCount = Math.max(ft.registeredTeamsCount || 0, regCount);
 
         combined.push({
@@ -130,17 +147,43 @@ router.get('/my-tournaments', authMiddleware, requireRole(['organizer', 'admin']
     const results = [];
     const seenTitles = new Set();
 
+    // High-performance batch aggregation for registration & match counts across all tournaments
+    const allIds = [
+      ...finalTbl.map(t => t._id),
+      ...feedTournaments.map(ft => ft._id)
+    ];
+    const allIdStrings = allIds.map(id => id ? id.toString() : '');
+    const queryIds = Array.from(new Set([...allIds, ...allIdStrings])).filter(Boolean);
+
+    const [regCountsAgg, matchCountsAgg] = await Promise.all([
+      TblTeamRegistration.aggregate([
+        { $match: { tournament_id: { $in: queryIds } } },
+        { $group: { _id: '$tournament_id', count: { $sum: 1 } } }
+      ]).catch(() => []),
+      TblMatch.aggregate([
+        { $match: { tournament_id: { $in: queryIds } } },
+        { $group: { _id: '$tournament_id', count: { $sum: 1 } } }
+      ]).catch(() => [])
+    ]);
+
+    const regMap = new Map();
+    for (const r of regCountsAgg) {
+      if (r && r._id) regMap.set(String(r._id), r.count);
+    }
+    const matchMap = new Map();
+    for (const m of matchCountsAgg) {
+      if (m && m._id) matchMap.set(String(m._id), m.count);
+    }
+
+    const getRegCount = (id) => (regMap.get(String(id)) || 0);
+    const getMatchCount = (id) => (matchMap.get(String(id)) || 0);
+
     for (const t of finalTbl) {
       seenTitles.add((t.tournament_name || '').toLowerCase());
 
-      const regCount = await TblTeamRegistration.countDocuments({
-        $or: [{ tournament_id: t._id }, { tournament_id: t._id.toString() }]
-      });
+      const regCount = getRegCount(t._id);
       const registeredCount = Math.max(t.registered_teams_count || t.registeredTeamsCount || 0, regCount);
-
-      const matchCount = await TblMatch.countDocuments({
-        $or: [{ tournament_id: t._id }, { tournament_id: t._id.toString() }]
-      });
+      const matchCount = getMatchCount(t._id);
 
       const isFeePaid = Boolean(t.publishing_fee_paid);
       const isAdminApproved = Boolean(t.admin_approved || t.status === 'Admin_Approved');
@@ -176,14 +219,9 @@ router.get('/my-tournaments', authMiddleware, requireRole(['organizer', 'admin']
 
     for (const ft of feedTournaments) {
       if (!seenTitles.has((ft.title || '').toLowerCase())) {
-        const regCount = await TblTeamRegistration.countDocuments({
-          $or: [{ tournament_id: ft._id }, { tournament_id: ft._id.toString() }]
-        });
+        const regCount = getRegCount(ft._id);
         const registeredCount = Math.max(ft.registeredTeamsCount || 0, regCount);
-
-        const matchCount = await TblMatch.countDocuments({
-          $or: [{ tournament_id: ft._id }, { tournament_id: ft._id.toString() }]
-        });
+        const matchCount = getMatchCount(ft._id);
 
         const isFeePaid = Boolean(ft.publishing_fee_paid);
         const isAdminApproved = Boolean(ft.admin_approved || ft.status === 'admin_approved' || ft.status === 'Admin_Approved');

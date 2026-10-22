@@ -53,20 +53,28 @@ export default function HostedTournamentsView({ onBack, onCreateNew, onOpenPayTo
     }
   };
 
-  const fetchHostedTournaments = async () => {
-    setLoading(true);
-    const res = await getOrganizerTournamentsAPI();
-    if (res && res.tournaments && Array.isArray(res.tournaments)) {
-      setTournaments(res.tournaments);
-    } else {
-      setTournaments([]);
+  const fetchHostedTournaments = async (isBackground = false) => {
+    if (!isBackground && tournaments.length === 0) {
+      setLoading(true);
     }
-    setLoading(false);
+    try {
+      const res = await getOrganizerTournamentsAPI();
+      if (res && res.tournaments && Array.isArray(res.tournaments)) {
+        setTournaments(res.tournaments);
+      } else if (!isBackground && tournaments.length === 0) {
+        setTournaments([]);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch hosted tournaments:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchHostedTournaments();
-    const interval = setInterval(fetchHostedTournaments, 4000);
+    fetchHostedTournaments(false);
+    // Silent background poll every 8 seconds without flipping the UI to a loading screen
+    const interval = setInterval(() => fetchHostedTournaments(true), 8000);
     return () => clearInterval(interval);
   }, []);
 
