@@ -3,8 +3,7 @@ import { CreditCard, Shield, CheckCircle2, Lock, X, Smartphone, Globe, AlertCirc
 import confetti from 'canvas-confetti';
 import { createPaymentOrderAPI, verifyPaymentAPI } from '../../services/api';
 import { loadRazorpaySDK } from '../../utils/razorpay';
-
-const RAZORPAY_KEY_ID = 'rzp_test_7JZmKUBcWxl6xQ';
+const RAZORPAY_KEY_ID = import.meta.env?.VITE_RAZORPAY_KEY_ID || 'rzp_test_7JZmKUBcWxl6xQ';
 
 export default function RazorpayModal({
   itemTitle = 'Tournament Registration Fee',

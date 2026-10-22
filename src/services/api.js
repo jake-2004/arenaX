@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env?.VITE_API_URL || import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const SERVER_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export const getFullUploadUrl = (url) => {
   if (!url) return '';
@@ -6,7 +7,7 @@ export const getFullUploadUrl = (url) => {
     return url;
   }
   const cleanUrl = url.startsWith('/') ? url : `/${url}`;
-  return `http://localhost:5000${cleanUrl}`;
+  return `${SERVER_BASE_URL}${cleanUrl}`;
 };
 
 const getAuthHeaders = (isFormData = false) => {

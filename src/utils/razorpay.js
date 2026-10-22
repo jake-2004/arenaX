@@ -1,7 +1,6 @@
 import confetti from 'canvas-confetti';
 import { createPaymentOrderAPI, verifyPaymentAPI } from '../services/api';
-
-export const RAZORPAY_KEY_ID = 'rzp_test_7JZmKUBcWxl6xQ';
+export const RAZORPAY_KEY_ID = import.meta.env?.VITE_RAZORPAY_KEY_ID || 'rzp_test_7JZmKUBcWxl6xQ';
 
 /**
  * Ensures the official Razorpay Checkout SDK is loaded into window.Razorpay

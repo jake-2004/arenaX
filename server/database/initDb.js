@@ -15,10 +15,15 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/arenax
 
 export const initializeCollectionsAndSeed = async () => {
   try {
-    console.log(`🔌 Connecting to MongoDB: ${MONGODB_URI}...`);
-    await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000
-    });
+    if (mongoose.connection.readyState !== 1) {
+      console.log(`🔌 Connecting to MongoDB: ${MONGODB_URI.replace(/:([^@]+)@/, ':****@')}...`);
+      const isAtlas = MONGODB_URI.includes('mongodb+srv://') || MONGODB_URI.includes('.mongodb.net');
+      await mongoose.connect(MONGODB_URI, {
+        family: 4,
+        ...(isAtlas ? { tls: true } : {}),
+        serverSelectionTimeoutMS: 15000
+      });
+    }
     console.log(`✅ Connected to MongoDB Database: "${mongoose.connection.name}"`);
 
     // All models list
