@@ -542,13 +542,6 @@ router.get('/admin/revenue-summary', authMiddleware, async (req, res) => {
         if (p.payment_type === 'Hosting') hostingRevenue += amt;
         else if (p.payment_type === 'Poster') posterRevenue += amt;
         else if (p.payment_type === 'Registration') registrationRevenue += amt;
-      } else if (status === 'Refunded' || status === 'Partially Refunded') {
-        refundedCount++;
-        totalGrossRevenue += amt; // was collected
-        totalRefunded += (refAmt > 0 ? refAmt : amt);
-        if (p.payment_type === 'Hosting') hostingRevenue += Math.max(0, amt - (refAmt > 0 ? refAmt : amt));
-        else if (p.payment_type === 'Poster') posterRevenue += Math.max(0, amt - (refAmt > 0 ? refAmt : amt));
-        else if (p.payment_type === 'Registration') registrationRevenue += Math.max(0, amt - (refAmt > 0 ? refAmt : amt));
       } else if (status === 'Failed') {
         failedCount++;
       } else if (status === 'Pending') {
@@ -1052,9 +1045,6 @@ router.get('/organizer/revenue-summary', authMiddleware, requireRole(['organizer
         totalTeamsPaid += 1;
       } else if (p.payment_status === 'Pending') {
         totalTeamsPending += 1;
-      } else if (p.payment_status === 'Refunded' || p.payment_status === 'Partially Refunded') {
-        totalGrossCollected += Math.max(0, amt - (refAmt > 0 ? refAmt : amt));
-        totalRefunded += (refAmt > 0 ? refAmt : amt);
       } else if (p.payment_status === 'Failed') {
         totalFailed += 1;
       }
@@ -1076,14 +1066,11 @@ router.get('/organizer/revenue-summary', authMiddleware, requireRole(['organizer
 
       tPayments.forEach(p => {
         const amt = Number(p.amount) || 0;
-        const refAmt = Number(p.refund_amount) || 0;
         if (p.payment_status === 'Success' || p.payment_status === 'Paid') {
           tCollected += amt;
           tPaidCount += 1;
         } else if (p.payment_status === 'Pending') {
           tPendingCount += 1;
-        } else if (p.payment_status === 'Refunded') {
-          tRefunded += (refAmt > 0 ? refAmt : amt);
         }
       });
 
@@ -1095,8 +1082,7 @@ router.get('/organizer/revenue-summary', authMiddleware, requireRole(['organizer
         paid_teams_count: tPaidCount,
         pending_teams_count: tPendingCount,
         total_collected: tCollected,
-        total_refunded: tRefunded,
-        net_collected: Math.max(0, tCollected - tRefunded)
+        net_collected: tCollected
       };
     });
 
