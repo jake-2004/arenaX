@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CreditCard, DollarSign, Users, Trophy, CheckCircle2, Clock, 
-  XCircle, Undo2, Search, ArrowUpDown, Filter, Download, 
+  XCircle, Search, ArrowUpDown, Filter, Download, 
   Printer, ArrowLeft, RefreshCw, Sparkles, ExternalLink, 
   Copy, Check, FileText, AlertCircle, ShieldCheck, Tag, Info, Calendar, ChevronDown
 } from 'lucide-react';
 import { 
   getOrganizerTeamPaymentsAPI, 
   getOrganizerRevenueSummaryAPI, 
-  markOrganizerPaymentStatusAPI, 
-  refundOrganizerTeamPaymentAPI 
+  markOrganizerPaymentStatusAPI 
 } from '../../services/api';
 
 export default function OrganizerTeamPaymentsView({ organizer, initialTournamentId, onBack }) {
@@ -27,7 +26,6 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
   // Modals State
   const [receiptModal, setReceiptModal] = useState(null);
   const [markModal, setMarkModal] = useState(null);
-  const [refundModal, setRefundModal] = useState(null);
 
   // Form states
   const [markForm, setMarkForm] = useState({
@@ -35,11 +33,6 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
     payment_method: 'Cash / Venue Collection',
     amount: 500,
     notes: ''
-  });
-
-  const [refundForm, setRefundForm] = useState({
-    amount: 500,
-    reason: 'Team withdrew prior to fixture scheduling'
   });
 
   const [actionLoading, setActionLoading] = useState(false);
@@ -128,34 +121,6 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
     }
   };
 
-  // Open Refund Modal
-  const handleOpenRefundModal = (item) => {
-    setRefundModal(item);
-    setRefundForm({
-      amount: item.amount || 500,
-      reason: 'Team withdrew prior to fixture generation as requested by captain.'
-    });
-  };
-
-  // Submit Refund
-  const handleSubmitRefund = async (e) => {
-    e.preventDefault();
-    if (!refundModal) return;
-
-    setActionLoading(true);
-    const targetId = refundModal.payment_record_id || refundModal.registration_id || refundModal.id;
-    const res = await refundOrganizerTeamPaymentAPI(targetId, refundForm);
-    setActionLoading(false);
-
-    if (res && res.success) {
-      showToast(res.message || `🎉 Refund of ₹${refundForm.amount} processed!`);
-      setRefundModal(null);
-      fetchPaymentsData();
-    } else {
-      alert(res?.message || 'Failed to process refund.');
-    }
-  };
-
   // Export CSV
   const handleExportCSV = () => {
     if (!payments || payments.length === 0) return;
@@ -176,9 +141,7 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
       'Registration_Date',
       'Payment_Date',
       'Marked_By_Organizer',
-      'Marked_Notes',
-      'Refund_ID',
-      'Refund_Amount'
+      'Marked_Notes'
     ];
 
     const rows = payments.map(p => [
@@ -198,9 +161,7 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
       p.registration_date ? new Date(p.registration_date).toLocaleDateString() : '',
       p.payment_date ? new Date(p.payment_date).toLocaleDateString() : '',
       p.marked_by_organizer ? 'YES' : 'NO',
-      `"${(p.marked_notes || '').replace(/"/g, '""')}"`,
-      p.refund_id || '',
-      p.refund_amount || 0
+      `"${(p.marked_notes || '').replace(/"/g, '""')}"`
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -316,11 +277,6 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
                 <td><strong>Organizer Mark Audit</strong></td>
                 <td style="text-align: right; color:#8B0000; font-weight:700;">Verified By Host: ${item.marked_notes || 'Venue Confirmed'}</td>
               </tr>` : ''}
-              ${item.refund_id ? `
-              <tr style="color: #6b21a8;">
-                <td><strong>Refund Audit ID</strong></td>
-                <td style="text-align: right;">${item.refund_id} (₹${item.refund_amount})</td>
-              </tr>` : ''}
             </table>
 
             <div class="total-box">
@@ -371,7 +327,7 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
             Registered Teams <span className="text-[#8B0000]">Payment Management</span>
           </h1>
           <p className="text-xs text-[#6B7280] mt-1 max-w-2xl leading-relaxed">
-            Track entry fee payments from registered teams, verify online Razorpay transactions, mark offline venue payments, issue refunds, and print official team tax receipts.
+            Track entry fee payments from registered teams, verify online Razorpay transactions, mark offline venue payments, and print official team tax receipts.
           </p>
         </div>
 
@@ -413,8 +369,8 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
         </div>
       </div>
 
-      {/* 5 Revenue & Payment Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Revenue & Payment Metrics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Card 1: Gross Entry Fees */}
         <div className="p-5 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm space-y-2">
@@ -444,7 +400,7 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
             ₹{summary?.netEarnings ? summary.netEarnings.toLocaleString() : '1,000'}
           </p>
           <p className="text-[11px] font-bold text-[#8B0000]">
-            Factoring in Refunds & Returns
+            Net Collected (Platform Verified)
           </p>
         </div>
 
@@ -477,22 +433,6 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
           </p>
           <p className="text-[11px] font-semibold text-amber-700">
             Awaiting Verification / Cash
-          </p>
-        </div>
-
-        {/* Card 5: Refunded Fees */}
-        <div className="p-5 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Refunded</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-              <Undo2 className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-3xl font-black text-purple-700 font-mono">
-            ₹{summary?.totalRefunded ? summary.totalRefunded.toLocaleString() : '500'}
-          </p>
-          <p className="text-[11px] font-semibold text-purple-600">
-            Returned to Withdrawn Teams
           </p>
         </div>
 
@@ -556,7 +496,6 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
               { id: 'all', label: 'All Payments' },
               { id: 'paid', label: 'Verified Paid' },
               { id: 'pending', label: 'Pending Payment' },
-              { id: 'refunded', label: 'Refunded' },
               { id: 'failed', label: 'Failed' }
             ].map(tab => (
               <button
@@ -641,7 +580,6 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
                 {payments.map((p, idx) => {
                   const isPaid = (p.payment_status || '').toLowerCase() === 'paid' || (p.payment_status || '').toLowerCase() === 'success';
                   const isPending = (p.payment_status || '').toLowerCase() === 'pending';
-                  const isRefunded = (p.payment_status || '').toLowerCase() === 'refunded' || (p.payment_status || '').toLowerCase() === 'partially refunded';
 
                   return (
                     <tr key={p.id || idx} className="hover:bg-slate-50/80 transition-colors">
@@ -718,13 +656,7 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
                             <span>Pending</span>
                           </span>
                         )}
-                        {isRefunded && (
-                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-extrabold uppercase">
-                            <Undo2 className="w-3 h-3 text-purple-600" />
-                            <span>Refunded</span>
-                          </span>
-                        )}
-                        {!isPaid && !isPending && !isRefunded && (
+                        {!isPaid && !isPending && (
                           <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-extrabold uppercase">
                             <XCircle className="w-3 h-3 text-rose-600" />
                             <span>{p.payment_status}</span>
@@ -780,19 +712,6 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
                             <Tag className="w-3.5 h-3.5" />
                             <span>Mark</span>
                           </button>
-
-                          {/* Refund Button (Only for Paid items) */}
-                          {isPaid && (
-                            <button
-                              onClick={() => handleOpenRefundModal(p)}
-                              className="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-600 text-purple-700 hover:text-white text-xs font-bold transition-all flex items-center space-x-1 border border-purple-200 cursor-pointer"
-                              title="Issue Refund for Withdrawn Team"
-                            >
-                              <Undo2 className="w-3.5 h-3.5" />
-                              <span>Refund</span>
-                            </button>
-                          )}
-
                         </div>
                       </td>
 
@@ -918,7 +837,7 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Payment Status</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {['Paid', 'Pending', 'Refunded'].map(st => (
+                  {['Paid', 'Pending'].map(st => (
                     <button
                       key={st}
                       type="button"
@@ -986,84 +905,6 @@ export default function OrganizerTeamPaymentsView({ organizer, initialTournament
                 >
                   {actionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                   <span>Save Status</span>
-                </button>
-              </div>
-
-            </form>
-
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL 3: ISSUE REFUND MODAL */}
-      {/* ========================================================================= */}
-      {refundModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl relative">
-            
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div>
-                <h3 className="text-base font-black text-[#1F2937] flex items-center space-x-2">
-                  <Undo2 className="w-5 h-5 text-purple-700" />
-                  <span>Issue Team Entry Fee Refund</span>
-                </h3>
-                <p className="text-xs text-slate-400">{refundModal.team_name} • Paid ₹{refundModal.amount}</p>
-              </div>
-              <button onClick={() => setRefundModal(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600">
-                <XCircle className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitRefund} className="space-y-4 text-xs">
-              
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Refund Amount (₹)</label>
-                <input
-                  type="number"
-                  value={refundForm.amount}
-                  onChange={(e) => setRefundForm({ ...refundForm, amount: Number(e.target.value) })}
-                  max={refundModal.amount}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-600"
-                  required
-                />
-                <span className="text-[10px] text-slate-400">Default is full refund of ₹{refundModal.amount}.</span>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Refund Reason Code</label>
-                <select
-                  value={refundForm.reason}
-                  onChange={(e) => setRefundForm({ ...refundForm, reason: e.target.value })}
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-300 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-600"
-                >
-                  <option value="Team withdrew prior to fixture generation as requested by captain.">Team Withdrew With Notice</option>
-                  <option value="Tournament postponed / date rescheduled by organizer.">Tournament Rescheduled / Cancelled</option>
-                  <option value="Roster player eligibility disqualification.">Roster Eligibility Disqualification</option>
-                  <option value="Accidental duplicate registration payment.">Accidental Double Charge</option>
-                  <option value="Organizer goodwill refund.">Organizer Discretionary Refund</option>
-                </select>
-              </div>
-
-              <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-[11px] leading-relaxed">
-                ℹ️ Once confirmed, payment status will be updated to <strong>Refunded</strong>, net earnings will recalculate, and an automated refund memo notification will be dispatched to the team captain.
-              </div>
-
-              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setRefundModal(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={actionLoading}
-                  className="px-4 py-2 rounded-xl bg-purple-700 text-white font-bold hover:bg-purple-800 transition-all flex items-center space-x-1.5 cursor-pointer shadow-md disabled:opacity-50"
-                >
-                  {actionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
-                  <span>Confirm Refund</span>
                 </button>
               </div>
 

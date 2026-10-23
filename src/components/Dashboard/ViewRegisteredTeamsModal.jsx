@@ -182,10 +182,6 @@ export default function ViewRegisteredTeamsModal({ tournament, onClose, onOpenFi
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                           <span>Paid (₹{tournament.entryFee ?? 500})</span>
                         </span>
-                      ) : (reg.payment_status || '').toLowerCase() === 'refunded' ? (
-                        <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-black uppercase">
-                          ↩ Refunded
-                        </span>
                       ) : (
                         <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase flex items-center space-x-1">
                           <Clock className="w-3 h-3 text-amber-700" />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getTournamentsAPI, getUserRegistrationsAPI, getUserFixturesAPI, getMyPlayerProfileAPI, getMyInvitationsAPI, respondToInvitationAPI } from '../../services/api';
-import { MapPin, Trophy, Users, ArrowUpRight, Plus, Filter, Star, Shield, FileCheck, Check, X, Edit3, RefreshCw, Clock, Calendar, Shuffle, UserCheck, Hash, CreditCard, BadgeCheck, Sparkles, Award, Bot, HelpCircle } from 'lucide-react';
+import { MapPin, Trophy, Users, ArrowUpRight, Plus, Filter, Star, Shield, FileCheck, Check, X, Edit3, RefreshCw, Clock, Calendar, Shuffle, UserCheck, Hash, CreditCard, BadgeCheck, Sparkles, Award, HelpCircle } from 'lucide-react';
 import RegistrationModal from './RegistrationModal';
 import PlayerIDModal from './PlayerIDModal';
 import UpdateDeclinedPlayerModal from './UpdateDeclinedPlayerModal';
@@ -9,7 +9,6 @@ import TournamentSpectatorCenterPage from './TournamentSpectatorCenterPage';
 import RazorpayModal from '../Features/RazorpayModal';
 import UserCareerStatsView from './UserCareerStatsView';
 import HeroSportsSlideshow from './HeroSportsSlideshow';
-import LocalUserAIChatbot from '../Features/LocalUserAIChatbot';
 
 function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegisterTeam }) {
   const [activeTab, setActiveTab] = useState('recommendations'); // 'recommendations' | 'myteams' | 'matchcenter' | 'career_stats'
@@ -17,7 +16,6 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
   const [expandedPosterTournament, setExpandedPosterTournament] = useState(null);
   const [showPlayerIdModal, setShowPlayerIdModal] = useState(false);
   const [showRegisterPlayerModal, setShowRegisterPlayerModal] = useState(false);
-  const [showAiChatbot, setShowAiChatbot] = useState(false);
   const [selectedTournamentForHub, setSelectedTournamentForHub] = useState(null);
   const [razorpayTargetReg, setRazorpayTargetReg] = useState(null);
   const [myPlayerProfile, setMyPlayerProfile] = useState(null);
@@ -48,11 +46,6 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
     ) {
       setActiveTab('recommendations');
     } else if (
-      activeNavAction === 'ai_assistant' ||
-      activeNavAction === 'AI Doubt Clearing Bot'
-    ) {
-      setShowAiChatbot(true);
-    } else if (
       activeNavAction === 'my_career_stats' ||
       activeNavAction === 'Match Results & Stats' ||
       activeNavAction === 'career_stats' ||
@@ -61,22 +54,6 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
       setActiveTab('career_stats');
     }
   }, [activeNavAction, navKey]);
-
-  const handleAiActionNavigate = (action) => {
-    if (action === 'register_as_player') {
-      setShowRegisterPlayerModal(true);
-    } else if (action === 'upload_player_id') {
-      setShowPlayerIdModal(true);
-    } else if (action === 'my_teams') {
-      setActiveTab('myteams');
-    } else if (action === 'my_career_stats') {
-      setActiveTab('career_stats');
-    } else if (action === 'dashboard') {
-      setActiveTab('recommendations');
-    } else if (onNavigate) {
-      onNavigate(action);
-    }
-  };
 
   const [myInvitations, setMyInvitations] = useState([]);
 
@@ -368,37 +345,6 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
           </div>
         </div>
       )}
-
-      {/* ARENAX AI DOUBT CLEARING CARD BANNER */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-slate-900 via-[#8B0000] to-slate-950 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border border-slate-800 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="flex items-center space-x-3.5 z-10">
-          <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shadow-inner shrink-0">
-            <Bot className="w-6 h-6 text-amber-300" />
-          </div>
-          <div>
-            <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-white/10 border border-white/20 text-amber-300 text-[10px] font-black uppercase tracking-wider mb-1">
-              <Sparkles className="w-3 h-3" />
-              <span>AI Doubt Clearing Assistant</span>
-            </div>
-            <h3 className="text-base sm:text-lg font-black tracking-tight">
-              Have doubts about tournament rules, player IDs, or registration?
-            </h3>
-            <p className="text-xs text-white/80 max-w-xl">
-              Get instant answers, official rule clarifications, and step-by-step guidance from ArenaX AI.
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowAiChatbot(true)}
-          className="px-5 py-2.5 rounded-xl bg-white text-[#8B0000] hover:bg-slate-100 text-xs font-black transition-all flex items-center space-x-2 shadow-lg shrink-0 cursor-pointer z-10"
-        >
-          <Bot className="w-4 h-4 text-[#8B0000]" />
-          <span>Ask ArenaX AI Now →</span>
-        </button>
-      </div>
 
       {/* BIG APPEALING HERO SPORTS SLIDESHOW (SHOWCASES ORGANIZED TOURNAMENTS) */}
       <HeroSportsSlideshow
@@ -1249,14 +1195,6 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
           }}
         />
       )}
-
-      {/* ARENAX AI DOUBT CLEARING CHATBOT */}
-      <LocalUserAIChatbot 
-        user={user}
-        isOpen={showAiChatbot}
-        onClose={() => setShowAiChatbot(false)}
-        onNavigateAction={handleAiActionNavigate}
-      />
 
     </div>
   );

@@ -3,7 +3,7 @@ import {
   Home, Trophy, Users, Settings, Activity, ShieldCheck,
   PlusCircle, Clock, Upload, CheckCircle2, Building,
   FileText, Sparkles, UserCheck, Layers, BadgeCheck, Radio, FileCheck, CreditCard,
-  Bot, MessageSquare, Wand2
+  MessageSquare, Wand2
 } from 'lucide-react';
 
 export default function Sidebar({ userRole, activeNav: externalActiveNav, onNavSelect }) {
@@ -120,12 +120,6 @@ export default function Sidebar({ userRole, activeNav: externalActiveNav, onNavS
           title: 'CAREER & PERFORMANCE',
           items: [
             { id: 'my_career_stats', label: 'Match Results & Stats', icon: Trophy, badge: 'Career' }
-          ]
-        },
-        {
-          title: 'HELP & AI ASSISTANT',
-          items: [
-            { id: 'ai_assistant', label: 'AI Doubt Clearing Bot', icon: Bot, badge: 'Live AI', highlight: true }
           ]
         },
         {

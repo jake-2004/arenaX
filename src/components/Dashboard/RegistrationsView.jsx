@@ -189,10 +189,6 @@ export default function RegistrationsView({ onBack }) {
                                     <span>✔ Paid Entry Fee</span>
                                     {reg.payment_amount && <span>(₹{reg.payment_amount})</span>}
                                   </span>
-                                ) : (reg.payment_status || '').toLowerCase() === 'refunded' ? (
-                                  <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-black uppercase">
-                                    ↩ Fee Refunded
-                                  </span>
                                 ) : (
                                   <div className="flex items-center space-x-1.5">
                                     <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase flex items-center space-x-1">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CreditCard, DollarSign, Search, RefreshCw, ArrowUpRight, 
-  RotateCcw, CheckCircle2, XCircle, Clock, Download, 
+  CheckCircle2, XCircle, Clock, Download, 
   Printer, ShieldCheck, Trophy, Image as ImageIcon, Users, 
   Copy, Check, FileText, X
 } from 'lucide-react';
@@ -78,7 +78,7 @@ export default function AdminPaymentManagementView({ onBack }) {
 
   // Export to CSV
   const handleExportCSV = () => {
-    const headers = ['Transaction_ID', 'Payment_ID', 'Razorpay_Payment_ID', 'Razorpay_Order_ID', 'Service_Type', 'Item_Title', 'Payer_Name', 'Payer_Email', 'Payer_Phone', 'Amount_INR', 'Status', 'Refund_ID', 'Refund_Amount', 'Date'];
+    const headers = ['Transaction_ID', 'Payment_ID', 'Razorpay_Payment_ID', 'Razorpay_Order_ID', 'Service_Type', 'Item_Title', 'Payer_Name', 'Payer_Email', 'Payer_Phone', 'Amount_INR', 'Status', 'Date'];
     const rows = sortedPayments.map(p => [
       p.transaction_id,
       p.payment_id,
@@ -91,8 +91,6 @@ export default function AdminPaymentManagementView({ onBack }) {
       `"${(p.payer?.phone || '').replace(/"/g, '""')}"`,
       p.amount,
       p.payment_status,
-      p.refund?.id || '',
-      p.refund?.amount || 0,
       p.payment_date ? new Date(p.payment_date).toISOString() : ''
     ]);
 
@@ -121,7 +119,6 @@ export default function AdminPaymentManagementView({ onBack }) {
   const handlePrintReceipt = (p) => {
     const win = window.open('', '_blank');
     const dateFormatted = new Date(p.payment_date).toLocaleString();
-    const isRefunded = p.payment_status === 'Refunded' || p.payment_status === 'Partially Refunded';
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -135,7 +132,6 @@ export default function AdminPaymentManagementView({ onBack }) {
           .brand-title { font-size: 26px; font-weight: 900; color: #8B0000; letter-spacing: -0.5px; }
           .brand-subtitle { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 800; letter-spacing: 1px; }
           .receipt-badge { font-size: 12px; font-weight: 800; color: #047857; background: #d1fae5; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; display: inline-block; }
-          .refund-badge { background: #fee2e2; color: #b91c1c; }
           .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; font-size: 13px; }
           .section-title { font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 800; margin-bottom: 6px; }
           .item-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 13px; }
@@ -163,8 +159,8 @@ export default function AdminPaymentManagementView({ onBack }) {
               <p style="margin: 4px 0 0; font-size: 12px; color: #64748b;">GSTIN: 29AAACA1234D1Z5 • 256-Bit SSL Protected</p>
             </div>
             <div style="text-align: right;">
-              <span class="receipt-badge ${isRefunded ? 'refund-badge' : ''}">
-                ${isRefunded ? 'Refunded' : 'Payment Verified (Razorpay)'}
+              <span class="receipt-badge">
+                Payment Verified (Razorpay)
               </span>
               <p style="margin: 8px 0 0; font-size: 12px; font-weight: 700;">Ref: #${p.transaction_id}</p>
               <p style="margin: 2px 0 0; font-size: 11px; color: #64748b;">Date: ${dateFormatted}</p>
@@ -311,7 +307,7 @@ export default function AdminPaymentManagementView({ onBack }) {
       </div>
 
       {/* REVENUE SUMMARY METRICS CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Gross Revenue */}
         <div className="p-5 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm space-y-2 hover:border-[#8B0000] transition-all">
           <div className="flex items-center justify-between">
@@ -392,23 +388,6 @@ export default function AdminPaymentManagementView({ onBack }) {
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-emerald-700 font-bold">
             <span>Player Entry Fees</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
-          </div>
-        </div>
-
-        {/* Card 5: Total Refunds */}
-        <div className="p-5 rounded-2xl bg-white border border-[#E5E7EB] shadow-sm space-y-2 hover:border-rose-300 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Total Refunded</span>
-            <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-700 flex items-center justify-center">
-              <RotateCcw className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-rose-700 font-mono">
-            ₹{summary?.totalRefunded ? summary.totalRefunded.toLocaleString() : '0'}
-          </p>
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-rose-700 font-medium">
-            <span>{summary?.refundedCount || 0} Refunds Processed</span>
-            <span className="text-[10px] font-bold text-slate-400">Total Returned</span>
           </div>
         </div>
       </div>
@@ -542,7 +521,6 @@ export default function AdminPaymentManagementView({ onBack }) {
                 {sortedPayments.map((p) => {
                   const status = (p.payment_status || 'Success').toLowerCase();
                   const isSuccess = status === 'success';
-                  const isRefunded = status === 'refunded' || status === 'partially refunded';
                   const isFailed = status === 'failed';
 
                   return (
@@ -562,11 +540,6 @@ export default function AdminPaymentManagementView({ onBack }) {
                             {copiedId === p._id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                           </button>
                         </div>
-                        {p.refund?.id && (
-                          <span className="inline-block text-[10px] text-rose-600 font-mono font-bold bg-rose-50 px-1.5 py-0.5 rounded">
-                            Refund Ref: {p.refund.id}
-                          </span>
-                        )}
                       </td>
 
                       {/* Column 2: Payer */}
@@ -620,12 +593,6 @@ export default function AdminPaymentManagementView({ onBack }) {
                             <span>Successful</span>
                           </span>
                         )}
-                        {isRefunded && (
-                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-[10px] font-black uppercase tracking-wider">
-                            <RotateCcw className="w-3 h-3 text-rose-600" />
-                            <span>Refunded</span>
-                          </span>
-                        )}
                         {isFailed && (
                           <div className="space-y-0.5">
                             <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-[10px] font-black uppercase tracking-wider">
@@ -639,7 +606,7 @@ export default function AdminPaymentManagementView({ onBack }) {
                             )}
                           </div>
                         )}
-                        {!isSuccess && !isRefunded && !isFailed && (
+                        {!isSuccess && !isFailed && (
                           <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black uppercase tracking-wider">
                             <Clock className="w-3 h-3 text-amber-600" />
                             <span>Pending</span>

@@ -605,7 +605,7 @@ export default function CreateTournamentPage({ organizer, onBack, onTournamentCr
             rows="3"
             value={rules}
             onChange={(e) => setRules(e.target.value)}
-            placeholder="Enter match duration, team jersey requirements, refund policy, etc..."
+            placeholder="Enter match duration, team jersey requirements, tournament guidelines, etc..."
             className="w-full bg-white border border-[#E5E7EB] focus:border-[#8B0000] text-slate-800 text-xs rounded-xl p-3 focus:outline-none"
           />
         </div>

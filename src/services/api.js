@@ -591,18 +591,6 @@ export const getAdminRevenueSummaryAPI = async () => {
   }
 };
 
-export const processPaymentRefundAPI = async (paymentId, refundData) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/payments/admin/refund/${paymentId}`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(refundData)
-    });
-    return await parseResponse(res);
-  } catch (error) {
-    return { success: false, message: error.message };
-  }
-};
 
 // Organizer Team Registration Payments APIs
 export const getOrganizerTeamPaymentsAPI = async (filters = {}) => {
@@ -631,19 +619,6 @@ export const getOrganizerRevenueSummaryAPI = async () => {
 export const markOrganizerPaymentStatusAPI = async (id, data) => {
   try {
     const res = await fetch(`${API_BASE_URL}/payments/organizer/mark-payment-status/${id}`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(data)
-    });
-    return await parseResponse(res);
-  } catch (error) {
-    return { success: false, message: error.message };
-  }
-};
-
-export const refundOrganizerTeamPaymentAPI = async (id, data) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/payments/organizer/refund-team/${id}`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data)

@@ -409,7 +409,7 @@ export default function AdminDashboard({ activeNavAction, onNavigate }) {
                 ₹{stats.revenueSummary?.totalGrossRevenue ? stats.revenueSummary.totalGrossRevenue.toLocaleString() : '3,894'}
               </p>
               <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between text-[11px] text-[#8B0000] font-bold">
-                <span>Payment Module & Refunds</span>
+                <span>Payment Module & Audit Ledger</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-all" />
               </div>
             </div>

@@ -381,15 +381,10 @@ const ensureAdminPaymentRecords = async () => {
       payment_type: 'Hosting',
       amount: 499,
       currency: 'INR',
-      payment_status: 'Refunded',
+      payment_status: 'Success',
       payment_method: 'Razorpay',
       razorpay_payment_id: 'pay_ODn0O1g0B7Y885',
       razorpay_order_id: 'order_TgWSKIz4w717d5',
-      refund_id: 'rfnd_ODn0O1g0B7Y991',
-      refund_amount: 499,
-      refund_reason: 'Organizer requested cancellation prior to broadcast schedule.',
-      refund_status: 'Processed',
-      refund_date: new Date(Date.now() - 1000 * 60 * 60 * 24),
       payment_date: new Date(Date.now() - 1000 * 60 * 60 * 36)
     },
     {
@@ -448,8 +443,7 @@ router.get('/admin/all', authMiddleware, async (req, res) => {
         { user_email: { $regex: q, $options: 'i' } },
         { tournament_title: { $regex: q, $options: 'i' } },
         { poster_title: { $regex: q, $options: 'i' } },
-        { team_name: { $regex: q, $options: 'i' } },
-        { refund_id: { $regex: q, $options: 'i' } }
+        { team_name: { $regex: q, $options: 'i' } }
       ];
       if (!isNaN(numQ)) {
         orClauses.push({ payment_id: numQ });
@@ -608,104 +602,9 @@ router.get('/admin/revenue-summary', authMiddleware, async (req, res) => {
 });
 
 // @route   POST /api/payments/admin/refund/:paymentId
-// @desc    Admin: Process refund for a payment
+// @desc    Admin: Process refund for a payment (Disabled)
 router.post('/admin/refund/:paymentId', authMiddleware, async (req, res) => {
-  try {
-    const { paymentId } = req.params;
-    const { amount, reason = 'Admin initiated Razorpay refund' } = req.body;
-
-    const payment = await TblPayment.findOne({
-      $or: [
-        mongoose.isValidObjectId(paymentId) ? { _id: paymentId } : null,
-        !isNaN(Number(paymentId)) ? { payment_id: Number(paymentId) } : null,
-        { razorpay_payment_id: paymentId }
-      ].filter(Boolean)
-    });
-
-    if (!payment) {
-      return res.status(404).json({ success: false, message: 'Payment record not found.' });
-    }
-
-    if (payment.payment_status === 'Refunded') {
-      return res.status(400).json({ success: false, message: 'This transaction has already been refunded.' });
-    }
-
-    const refundAmount = Number(amount) || payment.amount;
-    let generatedRefundId = `rfnd_${Date.now().toString().slice(-8)}_${Math.floor(1000 + Math.random() * 9000)}`;
-
-    // Attempt official Razorpay API refund if valid payment id
-    if (payment.razorpay_payment_id && !payment.razorpay_payment_id.startsWith('pay_mock') && !payment.razorpay_payment_id.startsWith('pay_failed')) {
-      try {
-        const authHeader = `Basic ${Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64')}`;
-        const rzpRefRes = await fetch(`https://api.razorpay.com/v1/payments/${payment.razorpay_payment_id}/refund`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': authHeader
-          },
-          body: JSON.stringify({
-            amount: Math.round(refundAmount * 100),
-            notes: {
-              reason,
-              refunded_by: req.user.id ? String(req.user.id) : 'admin'
-            }
-          })
-        });
-
-        if (rzpRefRes.ok) {
-          const rzpRefData = await rzpRefRes.json();
-          if (rzpRefData && rzpRefData.id) {
-            generatedRefundId = rzpRefData.id;
-          }
-        }
-      } catch (rzpErr) {
-        console.warn('Razorpay live refund notice (using generated refund ID):', rzpErr.message);
-      }
-    }
-
-    // Update payment record in MongoDB
-    payment.payment_status = (refundAmount < payment.amount) ? 'Partially Refunded' : 'Refunded';
-    payment.refund_id = generatedRefundId;
-    payment.refund_amount = refundAmount;
-    payment.refund_reason = reason;
-    payment.refund_status = 'Processed';
-    payment.refund_date = new Date();
-    await payment.save();
-
-    // Create In-App Notification for Payer
-    if (payment.user_id) {
-      try {
-        const { createNotificationHelper } = await import('./notificationRoutes.js');
-        await createNotificationHelper({
-          userId: payment.user_id,
-          role: 'all',
-          title: 'Razorpay Refund Processed 💳',
-          message: `A refund of ₹${refundAmount} for "${payment.tournament_title || payment.poster_title || payment.payment_type}" has been processed via Razorpay. Refund ID: #${generatedRefundId}.`,
-          type: 'system',
-          actionNav: 'dashboard',
-          metadata: { paymentId: payment._id, refundId: generatedRefundId, amount: refundAmount }
-        });
-      } catch (nErr) {
-        console.warn('Refund notification notice:', nErr.message);
-      }
-    }
-
-    res.json({
-      success: true,
-      message: `🎉 Refund of ₹${refundAmount} successfully processed via Razorpay!`,
-      refund: {
-        refund_id: generatedRefundId,
-        amount: refundAmount,
-        reason,
-        date: payment.refund_date,
-        status: 'Processed'
-      },
-      payment
-    });
-  } catch (error) {
-    console.error('Error processing refund:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
+  return res.status(400).json({ success: false, message: 'Refund functionality has been disabled across ArenaX.' });
 });
 
 // @route   GET /api/payments/my-payments
@@ -1227,8 +1126,8 @@ router.post('/organizer/mark-payment-status/:id', authMiddleware, requireRole(['
     const { id } = req.params;
     const { status, payment_method = 'Cash / Venue Collection', notes = '', amount } = req.body;
 
-    if (!['Paid', 'Success', 'Pending', 'Refunded'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid payment status. Must be Paid, Pending, or Refunded.' });
+    if (!['Paid', 'Success', 'Pending'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment status. Must be Paid or Pending.' });
     }
 
     // Try finding by TblPayment ID
@@ -1246,7 +1145,6 @@ router.post('/organizer/mark-payment-status/:id', authMiddleware, requireRole(['
 
     const numericAmount = Number(amount) || payment?.amount || 500;
     const isPaid = status === 'Paid' || status === 'Success';
-    const isRefunded = status === 'Refunded';
 
     // 1. Update or create TblPayment
     if (!payment) {
@@ -1283,13 +1181,6 @@ router.post('/organizer/mark-payment-status/:id', authMiddleware, requireRole(['
       if (isPaid) {
         payment.payment_date = new Date();
       }
-      if (isRefunded) {
-        payment.refund_id = `rfnd_${Date.now().toString().slice(-8)}`;
-        payment.refund_amount = numericAmount;
-        payment.refund_reason = notes || 'Refund issued by tournament organizer.';
-        payment.refund_status = 'Processed';
-        payment.refund_date = new Date();
-      }
       payment.notes = {
         ...(payment.notes || {}),
         marked_by: req.user.id,
@@ -1303,7 +1194,7 @@ router.post('/organizer/mark-payment-status/:id', authMiddleware, requireRole(['
     if (registration) {
       registration.payment_status = isPaid ? 'Paid' : status;
       registration.payment_id = payment.razorpay_payment_id || `TXN-${payment.payment_id}`;
-      registration.payment_date = isPaid ? new Date() : (isRefunded ? null : registration.payment_date);
+      registration.payment_date = isPaid ? new Date() : registration.payment_date;
       registration.marked_by_organizer = true;
       registration.marked_notes = notes;
       await registration.save();
@@ -1319,13 +1210,9 @@ router.post('/organizer/mark-payment-status/:id', authMiddleware, requireRole(['
           role: 'user',
           title: isPaid 
             ? 'Entry Fee Verified & Marked as Paid! 💳' 
-            : isRefunded 
-            ? 'Registration Fee Refunded ↩️' 
             : 'Payment Status Updated',
           message: isPaid
             ? `Your registration payment of ₹${numericAmount} for "${payment.team_name}" in "${payment.tournament_title}" has been verified and marked as Paid by the Organizer.`
-            : isRefunded
-            ? `A refund of ₹${numericAmount} has been processed for your team "${payment.team_name}". Reason: ${notes || 'Organizer update'}.`
             : `Your registration payment status for "${payment.team_name}" was updated to ${status}.`,
           type: 'registration_status',
           actionNav: 'my_teams',
@@ -1349,73 +1236,9 @@ router.post('/organizer/mark-payment-status/:id', authMiddleware, requireRole(['
 });
 
 // @route   POST /api/payments/organizer/refund-team/:id
-// @desc    Organizer issues a refund for a team's registration fee
+// @desc    Organizer issues a refund for a team's registration fee (Disabled)
 router.post('/organizer/refund-team/:id', authMiddleware, requireRole(['organizer', 'admin']), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { amount, reason = 'Team withdrawal / registration cancellation' } = req.body;
-
-    let payment = await TblPayment.findById(id).catch(() => null);
-    if (!payment) {
-      payment = await TblPayment.findOne({ registration_id: id }).catch(() => null);
-    }
-
-    if (!payment) {
-      return res.status(404).json({ success: false, message: 'Payment record not found for refund.' });
-    }
-
-    const refundAmount = Number(amount) || payment.amount || 500;
-    const generatedRefundId = `rfnd_org_${Date.now().toString().slice(-8)}`;
-
-    payment.payment_status = (refundAmount < payment.amount) ? 'Partially Refunded' : 'Refunded';
-    payment.refund_id = generatedRefundId;
-    payment.refund_amount = refundAmount;
-    payment.refund_reason = reason;
-    payment.refund_status = 'Processed';
-    payment.refund_date = new Date();
-    await payment.save();
-
-    if (payment.registration_id) {
-      try {
-        await TblTeamRegistration.findByIdAndUpdate(payment.registration_id, {
-          payment_status: 'Refunded',
-          refund_id: generatedRefundId
-        });
-      } catch (e) {}
-    }
-
-    // In-app notification to captain
-    if (payment.user_id) {
-      try {
-        const { createNotificationHelper } = await import('./notificationRoutes.js');
-        await createNotificationHelper({
-          userId: payment.user_id,
-          role: 'user',
-          title: 'Entry Fee Refund Processed 💳',
-          message: `The organizer has processed a refund of ₹${refundAmount} for your team "${payment.team_name}". Reason: ${reason}. Refund Ref: #${generatedRefundId}`,
-          type: 'registration_status',
-          actionNav: 'my_teams',
-          metadata: { refundId: generatedRefundId, amount: refundAmount }
-        });
-      } catch (nErr) {}
-    }
-
-    res.json({
-      success: true,
-      message: `🎉 Refund of ₹${refundAmount} successfully processed for "${payment.team_name}"!`,
-      refund: {
-        refund_id: generatedRefundId,
-        amount: refundAmount,
-        reason,
-        date: payment.refund_date,
-        status: 'Processed'
-      },
-      payment
-    });
-  } catch (error) {
-    console.error('Error processing organizer refund:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
+  return res.status(400).json({ success: false, message: 'Refund functionality has been disabled across ArenaX.' });
 });
 
 export default router;
