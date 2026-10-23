@@ -865,6 +865,14 @@ router.post('/register-tournament', authMiddleware, requireRole(['user', 'admin'
           message: '⚠️ Player Registration Required: You must be registered as an official ArenaX Player before you can register for tournaments. Please register as a player first.'
         });
       }
+
+      if (userPlayer.verification_status !== 'Approved') {
+        return res.status(403).json({
+          success: false,
+          playerApprovalPending: true,
+          message: `⚠️ Player Approval Pending: Your player profile (ID #${userPlayer.numeric_player_id}) is currently pending Admin ID proof approval. Only after Admin approval can you register for tournaments.`
+        });
+      }
     }
     
     // Check if tournament has reached max team limit
@@ -946,7 +954,7 @@ router.post('/register-tournament', authMiddleware, requireRole(['user', 'admin'
         id_proof_doc: p.id_proof_doc || '',
         photo: p.photo || '',
         isVerifiedProfile: p.isVerifiedProfile || false,
-        invitation_status: idx === 0 ? 'Accepted' : (p.invitation_status === 'Accepted' ? 'Accepted' : (p.invitation_status === 'Not Sent' ? 'Not Sent' : 'Pending'))
+        invitation_status: 'Accepted'
       };
     }));
 
@@ -959,10 +967,8 @@ router.post('/register-tournament', authMiddleware, requireRole(['user', 'admin'
     });
 
     const isAlreadyPaid = existingUserReg && existingUserReg.payment_status === 'Paid';
-    const allAccepted = sanitizedPlayers.every(p => !p.numeric_player_id || p.invitation_status === 'Accepted');
-    const regStatus = allAccepted 
-      ? (isAlreadyPaid ? 'Pending' : 'Pending Payment')
-      : 'Pending Roster Invitations';
+    const allAccepted = true;
+    const regStatus = isAlreadyPaid ? 'Pending' : 'Pending Payment';
 
     if (existingUserReg) {
       existingUserReg.team_name = team_name || existingUserReg.team_name;
@@ -990,9 +996,7 @@ router.post('/register-tournament', authMiddleware, requireRole(['user', 'admin'
 
       return res.json({
         success: true,
-        message: allAccepted 
-          ? '🎉 All added players have accepted join requests! Team roster submitted to Organizer for review.' 
-          : '📩 Roster draft saved & join requests sent! Added players will receive invitations when they log in.',
+        message: '🎉 Team roster submitted directly to Organizer for review!',
         registration: existingUserReg
       });
     }

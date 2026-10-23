@@ -130,7 +130,7 @@ function RegistrationModal({ tournament, onClose, onRegisterSuccess, onViewMyReg
           id_proof_doc: '',
           verification_status: 'Pending',
           isVerifiedProfile: false,
-          invitation_status: idx === 0 ? 'Accepted' : 'Not Sent'
+          invitation_status: 'Accepted'
         }));
 
         // Fetch verified players list for live autocomplete search
@@ -139,25 +139,29 @@ function RegistrationModal({ tournament, onClose, onRegisterSuccess, onViewMyReg
           setVerifiedPlayers(searchRes.players);
         }
 
-        // Auto-fill logged in user's player profile into Slot 0
+        // Auto-fill logged in user's player profile into Slot 0 ONLY IF ADMIN APPROVED
         const profileRes = await getMyPlayerProfileAPI();
         if (isMounted && profileRes && profileRes.player) {
           const myP = profileRes.player;
-          baseRoster[0] = {
-            ...baseRoster[0],
-            numeric_player_id: myP.numeric_player_id,
-            player_name: myP.player_name,
-            sport: myP.sport || sport,
-            position: myP.position || getDefaultPosition(sport, 0),
-            jersey_number: myP.jersey_number || '1',
-            photo: myP.photo || '',
-            id_proof_type: myP.id_proof_type || 'Aadhaar Card',
-            id_proof_number: myP.id_proof_number || `Player ID #${myP.numeric_player_id}`,
-            id_proof_doc: myP.id_proof_doc || 'Verified Profile Proof',
-            verification_status: myP.verification_status || 'Pending',
-            invitation_status: 'Accepted',
-            isVerifiedProfile: true
-          };
+          if (myP.verification_status === 'Approved') {
+            baseRoster[0] = {
+              ...baseRoster[0],
+              numeric_player_id: myP.numeric_player_id,
+              player_name: myP.player_name,
+              sport: myP.sport || sport,
+              position: myP.position || getDefaultPosition(sport, 0),
+              jersey_number: myP.jersey_number || '1',
+              photo: myP.photo || '',
+              id_proof_type: myP.id_proof_type || 'Aadhaar Card',
+              id_proof_number: myP.id_proof_number || `Player ID #${myP.numeric_player_id}`,
+              id_proof_doc: myP.id_proof_doc || 'Verified Profile Proof',
+              verification_status: 'Approved',
+              invitation_status: 'Accepted',
+              isVerifiedProfile: true
+            };
+          } else {
+            setError(`⚠️ Player Approval Pending: Your athlete profile (ID #${myP.numeric_player_id}) is currently pending Admin verification. Only Admin-Approved players can register tournament rosters.`);
+          }
         }
 
         // Restore saved draft roster from MongoDB if available
@@ -224,7 +228,7 @@ function RegistrationModal({ tournament, onClose, onRegisterSuccess, onViewMyReg
       id_proof_number: p.id_proof_number || `Player ID #${p.numeric_player_id}`,
       id_proof_doc: p.id_proof_doc || 'Verified Profile Proof',
       verification_status: p.verification_status || 'Approved',
-      invitation_status: index === 0 ? 'Accepted' : 'Not Sent', // Request is NOT sent yet until 'Send Request' button is clicked!
+      invitation_status: 'Accepted', // Directly accepted! No invitation request needed!
       isVerifiedProfile: true
     };
     setPlayers(updated);
@@ -406,11 +410,9 @@ function RegistrationModal({ tournament, onClose, onRegisterSuccess, onViewMyReg
     });
   };
 
-  // Count verified slots & roster join request acceptances (Slot 0 is captain/registering user, always auto-accepted)
+  // Count verified slots (Direct selection, all selected slots are valid and accepted)
   const validSlotsCount = players.filter(p => p.isVerifiedProfile && p.numeric_player_id).length;
-  const acceptedCount = players.filter(p => p.isVerifiedProfile && p.numeric_player_id && (p.invitation_status === 'Accepted' || p.invitation_status === undefined || p.invitation_status === 'Captain')).length;
-  const allPlayersAccepted = validSlotsCount === requiredSlots && acceptedCount === requiredSlots;
-  const isFormValid = validSlotsCount === requiredSlots && allPlayersAccepted;
+  const isFormValid = validSlotsCount === requiredSlots;
 
   const autoTeamName = (players[0]?.player_name && players[0].player_name !== 'Captain / Player 1')
     ? (requiredSlots === 1 ? players[0].player_name : `${players[0].player_name}'s Team`)
@@ -429,20 +431,19 @@ function RegistrationModal({ tournament, onClose, onRegisterSuccess, onViewMyReg
         setLoading(false);
         return;
       }
-
-      if (players[i].invitation_status && players[i].invitation_status !== 'Accepted') {
-        setError(`⚠️ Registration Blocked: Player #${players[i].numeric_player_id} (${players[i].player_name}) has not accepted the join invitation yet. All ${requiredSlots} roster players must accept their join request before submitting.`);
-        setExpandedIndex(i);
-        setLoading(false);
-        return;
-      }
     }
+
+    // Directly set all selected players to Accepted
+    const finalPlayers = players.map(p => ({
+      ...p,
+      invitation_status: 'Accepted'
+    }));
 
     const response = await registerForTournamentAPI(
       tournament._id || tournament.tournament_id,
       autoTeamName,
       sport,
-      players
+      finalPlayers
     );
 
     setLoading(false);
@@ -757,33 +758,17 @@ function RegistrationModal({ tournament, onClose, onRegisterSuccess, onViewMyReg
               </span>
             </div>
 
-            {/* Roster Join Request Acceptance Summary Bar & Bulk Action Button */}
-            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 space-y-3 shadow-2xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center space-x-1.5 text-xs font-black text-slate-900">
-                    <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>ID Owner Join Request Acceptance Requirement</span>
-                  </div>
-                  <p className="text-[11px] text-slate-600 font-medium">
-                    {allPlayersAccepted 
-                      ? `✓ All ${requiredSlots} Roster Players Have Accepted. Registration Unlocked!` 
-                      : `⏳ ${acceptedCount}/${requiredSlots} Players Accepted. Each added player must log into their ArenaX account to accept.`}
-                  </p>
-                </div>
-
-                {validSlotsCount > 1 && !allPlayersAccepted && (
-                  <button
-                    type="button"
-                    onClick={handleSendAllRequests}
-                    disabled={loading}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:brightness-110 text-white text-xs font-black shrink-0 flex items-center justify-center space-x-1.5 shadow-md cursor-pointer transition-all"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                    <span>📩 Send Requests to All Added Players</span>
-                  </button>
-                )}
+            {/* Direct Verified Player Selection Notice Bar */}
+            <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-300 space-y-1 shadow-2xs">
+              <div className="flex items-center space-x-1.5 text-xs font-black text-emerald-950">
+                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Direct Verified Player Selection</span>
               </div>
+              <p className="text-[11px] text-emerald-800 font-medium">
+                {isFormValid
+                  ? `✓ All ${requiredSlots} required players selected! You can now register for the tournament directly without sending invitations.`
+                  : `Select verified player IDs for all ${requiredSlots} slots to directly register your team roster.`}
+              </p>
             </div>
 
             {/* Render Each Player Slot */}
@@ -874,60 +859,20 @@ function RegistrationModal({ tournament, onClose, onRegisterSuccess, onViewMyReg
                             </div>
 
                             {/* Bottom Toolbar: Status Pill & Action Buttons */}
-                            <div className="pt-2.5 border-t border-emerald-200 flex flex-wrap items-center justify-between gap-2.5">
+                            <div className="pt-2.5 border-t border-emerald-200 flex items-center justify-between gap-2.5">
                               {/* Left: Status Pill */}
                               <div>
-                                {idx === 0 || player.invitation_status === 'Accepted' ? (
-                                  <span className="px-3 py-1.5 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 text-[11px] font-black flex items-center space-x-1.5 shadow-2xs">
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                    <span>{idx === 0 ? '✓ Captain (Auto-Accepted)' : '✓ Accepted by Player'}</span>
-                                  </span>
-                                ) : player.invitation_status === 'Pending' ? (
-                                  <span className="px-3 py-1.5 rounded-xl bg-amber-100 border border-amber-300 text-amber-900 text-[11px] font-extrabold flex items-center space-x-1.5 animate-pulse shadow-2xs">
-                                    <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                    <span>⏳ Waiting for Player to Accept</span>
-                                  </span>
-                                ) : (
-                                  <span className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-300 text-slate-700 text-[11px] font-bold flex items-center space-x-1.5">
-                                    <span>⚪ Request Not Sent</span>
-                                  </span>
-                                )}
+                                <span className="px-3 py-1.5 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 text-[11px] font-black flex items-center space-x-1.5 shadow-2xs">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                  <span>{idx === 0 ? '✓ Captain (Auto-Accepted)' : '✓ Verified & Added to Roster'}</span>
+                                </span>
                               </div>
 
                               {/* Right: Actions */}
                               <div className="flex items-center gap-2">
-                                {idx > 0 && player.invitation_status !== 'Accepted' && (
-                                  player.invitation_status === 'Pending' ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRevokePlayerRequest(idx)}
-                                      className="px-3 py-1.5 rounded-xl bg-rose-100 hover:bg-rose-200 border border-rose-300 text-rose-800 text-xs font-bold flex items-center space-x-1 cursor-pointer transition-all shadow-xs"
-                                      title="Remove join request sent to this player"
-                                    >
-                                      <X className="w-3.5 h-3.5 text-rose-600" />
-                                      <span>Remove Request</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSendSinglePlayerRequest(idx)}
-                                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-white text-xs font-black flex items-center space-x-1 shadow-sm cursor-pointer transition-all"
-                                      title="Send join request to this player"
-                                    >
-                                      <Sparkles className="w-3.5 h-3.5 text-white" />
-                                      <span>📩 Send Request</span>
-                                    </button>
-                                  )
-                                )}
-
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    if (player.invitation_status === 'Pending') {
-                                      handleRevokePlayerRequest(idx);
-                                    }
-                                    clearSlotPlayer(idx);
-                                  }}
+                                  onClick={() => clearSlotPlayer(idx)}
                                   className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold flex items-center space-x-1 cursor-pointer transition-all shadow-xs"
                                   title="Select a different Player ID"
                                 >
@@ -1085,7 +1030,7 @@ function RegistrationModal({ tournament, onClose, onRegisterSuccess, onViewMyReg
                   <span>Pay ₹{entryFee} via Razorpay & Complete Registration</span>
                 </>
               ) : (
-                <span>🔒 Submit Blocked: Waiting for All {requiredSlots} Players to Accept ({acceptedCount}/{requiredSlots})</span>
+                <span>🔒 Select All {requiredSlots} Players to Register ({validSlotsCount}/{requiredSlots})</span>
               )}
             </button>
           </div>

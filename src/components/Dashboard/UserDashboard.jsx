@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getTournamentsAPI, getUserRegistrationsAPI, getUserFixturesAPI, getMyPlayerProfileAPI, getMyInvitationsAPI, respondToInvitationAPI } from '../../services/api';
-import { MapPin, Trophy, Users, ArrowUpRight, Plus, Filter, Star, Shield, FileCheck, Check, X, Edit3, RefreshCw, Clock, Calendar, Shuffle, UserCheck, Hash, CreditCard, BadgeCheck, Sparkles, Award, HelpCircle } from 'lucide-react';
+import { MapPin, Trophy, Users, ArrowUpRight, Plus, Filter, Star, Shield, ShieldAlert, FileCheck, Check, X, Edit3, RefreshCw, Clock, Calendar, Shuffle, UserCheck, Hash, CreditCard, BadgeCheck, Sparkles, Award, HelpCircle } from 'lucide-react';
 import RegistrationModal from './RegistrationModal';
 import PlayerIDModal from './PlayerIDModal';
 import UpdateDeclinedPlayerModal from './UpdateDeclinedPlayerModal';
@@ -20,15 +20,16 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
   const [razorpayTargetReg, setRazorpayTargetReg] = useState(null);
   const [myPlayerProfile, setMyPlayerProfile] = useState(null);
 
-  // Player registration required prompt state
+  // Player registration required & pending approval prompt state
   const [pendingTournamentForPlayerRegistration, setPendingTournamentForPlayerRegistration] = useState(null);
   const [showPlayerRequiredPrompt, setShowPlayerRequiredPrompt] = useState(false);
+  const [showPlayerPendingApprovalPrompt, setShowPlayerPendingApprovalPrompt] = useState(false);
 
   const [myRegistrations, setMyRegistrations] = useState([]);
   const [userFixtures, setUserFixtures] = useState([]);
   const [selectedPlayerToFix, setSelectedPlayerToFix] = useState(null); // { registration, player }
 
-  // Intercept and enforce player registration before tournament registration
+  // Intercept and enforce player registration & Admin approval before tournament registration
   const handleInitiateTournamentRegistration = async (tournament) => {
     if (!tournament) return;
 
@@ -43,13 +44,21 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
       } catch (e) {}
     }
 
-    // Check if user is registered as a player
+    // 1. Not registered as a player at all -> Prompt to register as player first
     if (!profile || !profile.numeric_player_id) {
       setPendingTournamentForPlayerRegistration(tournament);
       setShowPlayerRequiredPrompt(true);
       return;
     }
 
+    // 2. Registered, but ID proof is still pending or not approved by Admin
+    if (profile.verification_status !== 'Approved') {
+      setPendingTournamentForPlayerRegistration(tournament);
+      setShowPlayerPendingApprovalPrompt(true);
+      return;
+    }
+
+    // 3. User is an official Admin-Approved player -> Open tournament registration
     setActiveTournamentToRegister(tournament);
   };
 
@@ -1205,11 +1214,9 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
           onRegisterSuccess={(player) => {
             setMyPlayerProfile(player);
             setShowRegisterPlayerModal(false);
-            if (pendingTournamentForPlayerRegistration) {
-              const targetTourn = pendingTournamentForPlayerRegistration;
-              setPendingTournamentForPlayerRegistration(null);
-              setActiveTournamentToRegister(targetTourn);
-            }
+            // DO NOT automatically launch tournament registration.
+            // Only after Admin approval can the user register for tournaments!
+            setShowPlayerPendingApprovalPrompt(true);
           }}
         />
       )}
@@ -1307,6 +1314,117 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
                   className="w-full sm:w-auto px-5 py-3 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs transition-all cursor-pointer text-center"
                 >
                   Cancel
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Player Approval Pending by Admin Modal */}
+      {showPlayerPendingApprovalPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-[#E5E7EB] animate-in zoom-in-95 duration-200 text-left">
+            
+            {/* Header Gradient (Amber / Maroon) */}
+            <div className="bg-gradient-to-r from-amber-600 via-[#8B0000] to-[#6B0000] p-6 text-white relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPlayerPendingApprovalPrompt(false);
+                  setPendingTournamentForPlayerRegistration(null);
+                }}
+                className="absolute top-4 right-4 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="w-12 h-12 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center mb-3 shadow-inner">
+                <Clock className="w-6 h-6 text-amber-200 animate-pulse" />
+              </div>
+
+              <span className="inline-block px-2.5 py-0.5 rounded-full bg-amber-400/25 border border-amber-300/30 text-amber-100 text-[10px] font-black uppercase tracking-wider mb-1">
+                ⏳ Approval Pending by Admin
+              </span>
+              <h3 className="text-xl font-black text-white tracking-tight leading-snug">
+                Player ID Pending Admin Review
+              </h3>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-6 space-y-4">
+              {pendingTournamentForPlayerRegistration && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Target Tournament</span>
+                    <p className="text-xs font-black text-slate-900 truncate">
+                      {pendingTournamentForPlayerRegistration.title || pendingTournamentForPlayerRegistration.tournament_name || 'Tournament'}
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full bg-[#8B0000]/10 text-[#8B0000] text-[10px] font-black uppercase shrink-0">
+                    {pendingTournamentForPlayerRegistration.sport || 'Sports'}
+                  </span>
+                </div>
+              )}
+
+              {/* Athlete Details Card */}
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+                    <span className="text-xs font-black text-amber-950">
+                      {myPlayerProfile?.player_name || user?.name || 'Athlete'}
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-900 text-[10px] font-mono font-black">
+                    ID #{myPlayerProfile?.numeric_player_id || '100006'}
+                  </span>
+                </div>
+
+                <div className="text-[11px] text-amber-900/80 space-y-1">
+                  <p><strong>Sport:</strong> {myPlayerProfile?.sport || 'Football'} • <strong>Position:</strong> {myPlayerProfile?.position || 'Forward'}</p>
+                  <p><strong>ID Proof:</strong> {myPlayerProfile?.id_proof_type || 'Aadhaar Card'} (Submitted)</p>
+                  <p><strong>Status:</strong> <span className="text-amber-700 font-bold">Pending Admin ID Verification</span></p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed space-y-1.5">
+                <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Admin Approval Required</span>
+                </p>
+                <p className="text-[11px] text-slate-600">
+                  You are registered as a player, but your athlete pass is <strong>not yet approved</strong> by an Administrator.
+                </p>
+                <p className="text-[11px] text-slate-600">
+                  <strong>Only Admin-Approved Players can register for tournaments.</strong> Once an Admin verifies and approves your ID proof in the Admin Dashboard, tournament registration will be unlocked immediately.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex flex-col sm:flex-row items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPlayerPendingApprovalPrompt(false);
+                    setPendingTournamentForPlayerRegistration(null);
+                  }}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 to-[#8B0000] text-white font-extrabold text-xs hover:brightness-110 transition-all flex items-center justify-center space-x-2 shadow-lg shadow-amber-600/20 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Understood</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPlayerPendingApprovalPrompt(false);
+                    setShowRegisterPlayerModal(true);
+                  }}
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition-all cursor-pointer text-center shrink-0"
+                >
+                  View Digital Pass
                 </button>
               </div>
 
