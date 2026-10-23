@@ -16,6 +16,20 @@ const generateToken = (userObj) => {
   });
 };
 
+const formatDbErrorMessage = (error) => {
+  const msg = error?.message || 'Authentication service error';
+  if (
+    msg.includes('SSL alert number 80') ||
+    msg.includes('ssl3_read_bytes') ||
+    msg.includes('whitelist') ||
+    msg.includes('ReplicaSetNoPrimary') ||
+    msg.includes('querySrv ECONNREFUSED')
+  ) {
+    return '⚠️ MongoDB Atlas Connection Blocked: Your current network IP address is not whitelisted in MongoDB Atlas Network Access. Please log in to cloud.mongodb.com -> Network Access -> Add IP Address, and add your current IP address (or 0.0.0.0/0).';
+  }
+  return msg;
+};
+
 // @route   GET /api/auth/google/url
 // @desc    Generate Google OAuth 2.0 Authorization URL with Google People API scopes
 router.get('/google/url', (req, res) => {
@@ -354,7 +368,7 @@ router.post('/register', async (req, res) => {
 
   } catch (error) {
     console.error('Registration Error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: formatDbErrorMessage(error) });
   }
 });
 
@@ -407,7 +421,7 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error('Login MongoDB Error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: formatDbErrorMessage(error) });
   }
 });
 
