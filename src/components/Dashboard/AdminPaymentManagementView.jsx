@@ -220,12 +220,6 @@ export default function AdminPaymentManagementView({ onBack }) {
                 <td class="grand-total">Total Paid:</td>
                 <td class="grand-total" style="text-align: right;">₹${p.amount}</td>
               </tr>
-              ${isRefunded ? `
-              <tr>
-                <td style="color: #b91c1c; font-weight: 800; border-top: 1px dashed #f87171; padding-top: 6px;">Total Refunded:</td>
-                <td style="text-align: right; font-weight: 800; color: #b91c1c; border-top: 1px dashed #f87171; padding-top: 6px;">- ₹${p.refund?.amount || p.amount}</td>
-              </tr>
-              ` : ''}
             </table>
           </div>
 
@@ -234,10 +228,6 @@ export default function AdminPaymentManagementView({ onBack }) {
             <div>Payment ID: <strong>${p.razorpay_payment_id}</strong></div>
             <div>Order ID: <strong>${p.razorpay_order_id}</strong></div>
             <div>Signature Status: <strong>Verified (HMAC-SHA256)</strong></div>
-            ${p.refund?.id ? `
-            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1; color: #b91c1c;">
-              Refund Ref ID: <strong>${p.refund.id}</strong> • Reason: ${p.refund.reason}
-            </div>` : ''}
           </div>
         </div>
       </body>
@@ -717,13 +707,6 @@ export default function AdminPaymentManagementView({ onBack }) {
                   <span className="text-slate-400">Security Encryption:</span>
                   <span className="text-emerald-400 font-bold">HMAC-SHA256 Verified ✓</span>
                 </div>
-                {selectedReceiptPayment.refund?.id && (
-                  <div className="pt-2 border-t border-slate-700 text-rose-300">
-                    <div>Refund ID: #{selectedReceiptPayment.refund.id}</div>
-                    <div>Refund Amount: ₹{selectedReceiptPayment.refund.amount}</div>
-                    <div>Reason: {selectedReceiptPayment.refund.reason}</div>
-                  </div>
-                )}
               </div>
 
               {/* Actions */}
