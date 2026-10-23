@@ -848,6 +848,24 @@ router.get('/my-draft', authMiddleware, async (req, res) => {
 router.post('/register-tournament', authMiddleware, requireRole(['user', 'admin']), async (req, res) => {
   try {
     const { tournament_id, team_name, sport, players = [] } = req.body;
+
+    // Local user who is registered as a player can only register for tournament
+    if (req.user.role === 'user') {
+      const userPlayer = await TblPlayer.findOne({
+        $or: [
+          { user_id: req.user.id },
+          { email: (req.user.email || '').toLowerCase().trim() }
+        ]
+      }).lean();
+
+      if (!userPlayer || !userPlayer.numeric_player_id) {
+        return res.status(403).json({
+          success: false,
+          requirePlayerRegistration: true,
+          message: '⚠️ Player Registration Required: You must be registered as an official ArenaX Player before you can register for tournaments. Please register as a player first.'
+        });
+      }
+    }
     
     // Check if tournament has reached max team limit
     if (tournament_id) {

@@ -20,9 +20,38 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
   const [razorpayTargetReg, setRazorpayTargetReg] = useState(null);
   const [myPlayerProfile, setMyPlayerProfile] = useState(null);
 
+  // Player registration required prompt state
+  const [pendingTournamentForPlayerRegistration, setPendingTournamentForPlayerRegistration] = useState(null);
+  const [showPlayerRequiredPrompt, setShowPlayerRequiredPrompt] = useState(false);
+
   const [myRegistrations, setMyRegistrations] = useState([]);
   const [userFixtures, setUserFixtures] = useState([]);
   const [selectedPlayerToFix, setSelectedPlayerToFix] = useState(null); // { registration, player }
+
+  // Intercept and enforce player registration before tournament registration
+  const handleInitiateTournamentRegistration = async (tournament) => {
+    if (!tournament) return;
+
+    let profile = myPlayerProfile;
+    if (!profile) {
+      try {
+        const pRes = await getMyPlayerProfileAPI();
+        if (pRes && pRes.player) {
+          profile = pRes.player;
+          setMyPlayerProfile(pRes.player);
+        }
+      } catch (e) {}
+    }
+
+    // Check if user is registered as a player
+    if (!profile || !profile.numeric_player_id) {
+      setPendingTournamentForPlayerRegistration(tournament);
+      setShowPlayerRequiredPrompt(true);
+      return;
+    }
+
+    setActiveTournamentToRegister(tournament);
+  };
 
   // Sport Filter State
   const [selectedSportFilter, setSelectedSportFilter] = useState('All');
@@ -349,7 +378,7 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
       {/* BIG APPEALING HERO SPORTS SLIDESHOW (SHOWCASES ORGANIZED TOURNAMENTS) */}
       <HeroSportsSlideshow
         tournaments={dbTournaments}
-        onRegisterTeam={(tourn) => setActiveTournamentToRegister(tourn)}
+        onRegisterTeam={(tourn) => handleInitiateTournamentRegistration(tourn)}
         onOpenMatchCenter={(tourn) => setSelectedTournamentForHub(tourn)}
         onViewPoster={(tourn) => setExpandedPosterTournament(tourn)}
         onSelectSport={(sport) => {
@@ -513,7 +542,7 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
                     if (isAlreadyReg) {
                       return (
                         <button
-                          onClick={() => setActiveTournamentToRegister(t)}
+                          onClick={() => handleInitiateTournamentRegistration(t)}
                           className="w-full py-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold text-xs hover:bg-emerald-100 transition-all flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -535,7 +564,7 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
 
                     return (
                       <button
-                        onClick={() => setActiveTournamentToRegister(t)}
+                        onClick={() => handleInitiateTournamentRegistration(t)}
                         className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#8B0000] to-[#6B0000] text-white font-bold text-xs hover:brightness-110 shadow-md transition-all flex items-center justify-center space-x-1 cursor-pointer"
                       >
                         <span>Register for Tournament</span>
@@ -1090,7 +1119,7 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
                         type="button"
                         onClick={() => {
                           setExpandedPosterTournament(null);
-                          setActiveTournamentToRegister(t);
+                          handleInitiateTournamentRegistration(t);
                         }}
                         className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-lg transition-all flex items-center space-x-2 cursor-pointer"
                       >
@@ -1117,7 +1146,7 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
                       type="button"
                       onClick={() => {
                         setExpandedPosterTournament(null);
-                        setActiveTournamentToRegister(t);
+                        handleInitiateTournamentRegistration(t);
                       }}
                       className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#8B0000] via-[#6B0000] to-[#8B0000] hover:brightness-110 text-white text-xs font-black shadow-lg shadow-[#8B0000]/30 transition-all flex items-center space-x-2 cursor-pointer"
                     >
@@ -1175,8 +1204,116 @@ function UserDashboard({ user, activeNavAction, navKey, onNavigate, onOpenRegist
           onClose={() => setShowRegisterPlayerModal(false)}
           onRegisterSuccess={(player) => {
             setMyPlayerProfile(player);
+            setShowRegisterPlayerModal(false);
+            if (pendingTournamentForPlayerRegistration) {
+              const targetTourn = pendingTournamentForPlayerRegistration;
+              setPendingTournamentForPlayerRegistration(null);
+              setActiveTournamentToRegister(targetTourn);
+            }
           }}
         />
+      )}
+
+      {/* Must Register as Player Prompt Modal */}
+      {showPlayerRequiredPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-[#E5E7EB] animate-in zoom-in-95 duration-200 text-left">
+            
+            {/* Header Gradient */}
+            <div className="bg-gradient-to-r from-[#8B0000] via-[#A00000] to-[#6B0000] p-6 text-white relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPlayerRequiredPrompt(false);
+                  setPendingTournamentForPlayerRegistration(null);
+                }}
+                className="absolute top-4 right-4 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="w-12 h-12 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center mb-3 shadow-inner">
+                <UserCheck className="w-6 h-6 text-amber-300" />
+              </div>
+
+              <span className="inline-block px-2.5 py-0.5 rounded-full bg-white/20 text-amber-200 text-[10px] font-black uppercase tracking-wider mb-1">
+                Player Registration Required
+              </span>
+              <h3 className="text-xl font-black text-white tracking-tight leading-snug">
+                Register as a Player First
+              </h3>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-6 space-y-4">
+              {pendingTournamentForPlayerRegistration && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Target Tournament</span>
+                    <p className="text-xs font-black text-slate-900 truncate">
+                      {pendingTournamentForPlayerRegistration.title || pendingTournamentForPlayerRegistration.tournament_name || 'Tournament'}
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full bg-[#8B0000]/10 text-[#8B0000] text-[10px] font-black uppercase shrink-0">
+                    {pendingTournamentForPlayerRegistration.sport || 'Sports'}
+                  </span>
+                </div>
+              )}
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Only registered <strong>ArenaX Players</strong> can register for tournaments. You are currently not registered as an official player.
+              </p>
+
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2 text-xs">
+                <div className="flex items-center space-x-2 text-amber-900 font-bold text-[11px]">
+                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Why Register as a Player?</span>
+                </div>
+                <ul className="space-y-1.5 text-slate-700 text-[11px]">
+                  <li className="flex items-center space-x-1.5">
+                    <span className="text-emerald-600 font-bold">✔</span>
+                    <span>Get your unique official <strong>Numeric Player ID</strong></span>
+                  </li>
+                  <li className="flex items-center space-x-1.5">
+                    <span className="text-emerald-600 font-bold">✔</span>
+                    <span>Receive official digital <strong>Player ID Card & Barcode</strong></span>
+                  </li>
+                  <li className="flex items-center space-x-1.5">
+                    <span className="text-emerald-600 font-bold">✔</span>
+                    <span>Unlock instant eligibility to register teams and compete</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex flex-col sm:flex-row items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPlayerRequiredPrompt(false);
+                    setShowRegisterPlayerModal(true);
+                  }}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-[#8B0000] to-[#6B0000] text-white font-extrabold text-xs hover:brightness-110 transition-all flex items-center justify-center space-x-2 shadow-lg shadow-[#8B0000]/20 cursor-pointer"
+                >
+                  <UserCheck className="w-4 h-4 text-amber-300" />
+                  <span>Register as Player Now →</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPlayerRequiredPrompt(false);
+                    setPendingTournamentForPlayerRegistration(null);
+                  }}
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs transition-all cursor-pointer text-center"
+                >
+                  Cancel
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
       )}
 
       {/* RAZORPAY REGISTRATION CHECKOUT MODAL */}

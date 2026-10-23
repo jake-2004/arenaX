@@ -141,7 +141,7 @@ function RegistrationModal({ tournament, onClose, onRegisterSuccess, onViewMyReg
 
         // Auto-fill logged in user's player profile into Slot 0
         const profileRes = await getMyPlayerProfileAPI();
-        if (isMounted && profileRes && profileRes.player && profileRes.player.verification_status === 'Approved') {
+        if (isMounted && profileRes && profileRes.player) {
           const myP = profileRes.player;
           baseRoster[0] = {
             ...baseRoster[0],
@@ -154,7 +154,7 @@ function RegistrationModal({ tournament, onClose, onRegisterSuccess, onViewMyReg
             id_proof_type: myP.id_proof_type || 'Aadhaar Card',
             id_proof_number: myP.id_proof_number || `Player ID #${myP.numeric_player_id}`,
             id_proof_doc: myP.id_proof_doc || 'Verified Profile Proof',
-            verification_status: 'Approved',
+            verification_status: myP.verification_status || 'Pending',
             invitation_status: 'Accepted',
             isVerifiedProfile: true
           };
